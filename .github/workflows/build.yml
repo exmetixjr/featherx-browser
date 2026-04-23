@@ -20,11 +20,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Build Release APK with debug output
+        run: ./gradlew assembleRelease --stacktrace --info --no-daemon 2>&1
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: FeatherX-Browser-v1.0.${{ github.run_number }}
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
