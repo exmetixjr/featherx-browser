@@ -9,6 +9,7 @@ import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -24,20 +25,31 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    // ── State ──────────────────────────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────────────
+    private TabManager tabManager;
     private WebView  webView;
     private EditText urlBar;
     private ProgressBar progressBar;
-    private boolean erudaActive  = false;
-    private boolean desktopMode  = false;
-    private String  savedCustomUA = "";
+    private boolean devToolsActive = false;
+    private boolean desktopMode = false;
+    private String savedCustomUA = "";
+    private boolean incognitoMode = false;
+    private int currentSearchEngine = 0;
+    private static final String[] SEARCH_ENGINES = {
+        "https://www.google.com/search?q=",
+        "https://www.bing.com/search?q=",
+        "https://duckduckgo.com/?q=",
+        "https://search.yahoo.com/search?p="
+    };
+    private static final String[] SEARCH_NAMES = {"Google", "Bing", "DuckDuckGo", "Yahoo"};
 
     private static final String HOME = "https://www.google.com";
 
-    // ── Lifecycle ──────────────────────────────────────────────────────────
+    // ── Lifecycle ──────────────────────────────────────────────────
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +60,19 @@ public class MainActivity extends AppCompatActivity {
         urlBar      = findViewById(R.id.url_bar);
         progressBar = findViewById(R.id.progress_bar);
 
-        setupWebView();
+        // Initialize TabManager
+        tabManager = new TabManager(this);
+        tabManager.setListener((tab, newWebView) -> {
+            ViewGroup parent = (ViewGroup) webView.getParent();
+            int index = parent.indexOfChild(webView);
+            parent.removeView(webView);
+            webView = newWebView;
+            parent.addView(webView, index);
+            urlBar.setText(tab.url);
+            devToolsActive = false;
+        });
+
+        setupWebViewForMain();
         setupUrlBar();
         setupNavButtons();
 
@@ -61,9 +85,9 @@ public class MainActivity extends AppCompatActivity {
         else super.onBackPressed();
     }
 
-    // ── WebView Setup ──────────────────────────────────────────────────────
+    // ── WebView Setup ──────────────────────────────────────────────
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
-    private void setupWebView() {
+    private void setupWebViewForMain() {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -88,13 +112,19 @@ public class MainActivity extends AppCompatActivity {
                 urlBar.setText(url);
                 progressBar.setVisibility(View.VISIBLE);
                 progressBar.setProgress(0);
-                erudaActive = false; // eruda needs re-inject on new page
+                devToolsActive = false;
             }
             @Override
             public void onPageFinished(WebView v, String url) {
                 progressBar.setVisibility(View.GONE);
                 urlBar.setText(url);
                 CookieManager.getInstance().flush();
+                // Update tab manager
+                TabManager.Tab tab = tabManager.getCurrentTab();
+                if (tab != null) {
+                    tab.url = url;
+                    tab.title = v.getTitle();
+                }
             }
         });
 
@@ -106,12 +136,13 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onReceivedTitle(WebView v, String title) {
-                // Could set toolbar title here
+                TabManager.Tab tab = tabManager.getCurrentTab();
+                if (tab != null) tab.title = title;
             }
         });
     }
 
-    // ── URL Bar ────────────────────────────────────────────────────────────
+    // ── URL Bar ────────────────────────────────────────────────────
     private void setupUrlBar() {
         urlBar.setOnEditorActionListener((v, actionId, event) -> {
             boolean go = actionId == EditorInfo.IME_ACTION_GO
@@ -133,29 +164,56 @@ public class MainActivity extends AppCompatActivity {
         } else if (input.matches("^[\\w.-]+\\.[a-z]{2,}.*")) {
             url = "https://" + input;
         } else {
-            url = "https://www.google.com/search?q=" + android.net.Uri.encode(input);
+            url = SEARCH_ENGINES[currentSearchEngine] + android.net.Uri.encode(input);
         }
         webView.loadUrl(url);
-        // hide keyboard
         android.view.inputmethod.InputMethodManager imm =
             (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         imm.hideSoftInputFromWindow(urlBar.getWindowToken(), 0);
     }
 
-    // ── Navigation Buttons ─────────────────────────────────────────────────
+    // ── Navigation Buttons ─────────────────────────────────────────
     private void setupNavButtons() {
-        findViewById(R.id.btn_back).setOnClickListener(v -> {
-            if (webView.canGoBack()) webView.goBack();
-        });
-        findViewById(R.id.btn_forward).setOnClickListener(v -> {
-            if (webView.canGoForward()) webView.goForward();
-        });
-        findViewById(R.id.btn_refresh).setOnClickListener(v -> webView.reload());
+        findViewById(R.id.btn_reload_top).setOnClickListener(v -> webView.reload());
+        findViewById(R.id.btn_tabs_top).setOnClickListener(v -> showTabSwitcher());
         findViewById(R.id.btn_home).setOnClickListener(v -> webView.loadUrl(HOME));
-        findViewById(R.id.btn_tabs).setOnClickListener(v ->
-            Toast.makeText(this, "Multi-tab coming in v2", Toast.LENGTH_SHORT).show()
-        );
         findViewById(R.id.btn_tools).setOnClickListener(v -> openToolsSheet());
+    }
+
+    // ── Tab Management ────────────────────────────────────────────
+    private void showTabSwitcher() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Tabs (" + tabManager.getTabCount() + ")");
+
+        List<TabManager.Tab> tabs = tabManager.getAllTabs();
+        String[] items = new String[tabs.size()];
+        for (int i = 0; i < tabs.size(); i++) {
+            TabManager.Tab tab = tabs.get(i);
+            String title = tab.title != null && !tab.title.isEmpty() ? tab.title : "New Tab";
+            String url = tab.url != null && !tab.url.isEmpty() ? tab.url : "about:blank";
+            items[i] = (tab.isIncognito ? "🔒 " : "") + title + "\n" + url;
+        }
+
+        builder.setItems(items, (dialog, which) -> tabManager.switchToTab(which));
+        builder.setPositiveButton("New Tab", (dialog, which) -> {
+            TabManager.Tab newTab = tabManager.createTab(incognitoMode);
+            // Need to create WebView for this tab
+            WebView newWebView = new WebView(this);
+            // Copy settings from current WebView
+            newWebView.getSettings().setJavaScriptEnabled(true);
+            newWebView.getSettings().setDomStorageEnabled(true);
+            // ... more settings
+            tabManager.initWebViewForTab(newTab, newWebView);
+            newWebView.loadUrl(HOME);
+        });
+        builder.setNegativeButton("Close Tab", (dialog, which) -> {
+            tabManager.closeTab(tabManager.getCurrentIndex());
+        });
+        builder.setNeutralButton("Incognito: " + (incognitoMode ? "ON" : "OFF"), (dialog, which) -> {
+            incognitoMode = !incognitoMode;
+            Toast.makeText(this, "New tabs will be " + (incognitoMode ? "incognito" : "normal"), Toast.LENGTH_SHORT).show();
+        });
+        builder.show();
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -170,7 +228,7 @@ public class MainActivity extends AppCompatActivity {
         TabLayout tabs    = root.findViewById(R.id.tool_tabs);
         FrameLayout frame = root.findViewById(R.id.tool_content);
 
-        String[] tabNames = {"DevTools", "UA", "JS Inject", "Cookies", "Storage", "Snippets", "Runner"};
+        String[] tabNames = {"DevTools", "Search", "UA", "JS Inject", "Cookies", "Storage", "Snippets", "Runner"};
         for (String name : tabNames) tabs.addTab(tabs.newTab().setText(name));
 
         renderTab(frame, 0, sheet);
@@ -190,16 +248,17 @@ public class MainActivity extends AppCompatActivity {
         frame.removeAllViews();
         switch (idx) {
             case 0: frame.addView(tabDevTools()); break;
-            case 1: frame.addView(tabUA());       break;
-            case 2: frame.addView(tabJSInject()); break;
-            case 3: frame.addView(tabCookies());  break;
-            case 4: frame.addView(tabStorage());  break;
-            case 5: frame.addView(tabSnippets()); break;
-            case 6: frame.addView(tabRunner());   break;
+            case 1: frame.addView(tabSearch()); break;
+            case 2: frame.addView(tabUA());       break;
+            case 3: frame.addView(tabJSInject()); break;
+            case 4: frame.addView(tabCookies());  break;
+            case 5: frame.addView(tabStorage());  break;
+            case 6: frame.addView(tabSnippets()); break;
+            case 7: frame.addView(tabRunner());   break;
         }
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────
     private LinearLayout column() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -298,29 +357,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: DevTools
+    //  TAB: DevTools (Eruda-based)
     // ═══════════════════════════════════════════════════════════════════════
     private View tabDevTools() {
         LinearLayout l = column();
 
-        l.addView(label("ERUDA DEVTOOLS"));
-        Button erudaBtn = accentBtn(
-            erudaActive ? "Hide Eruda Panel" : "Inject & Show Eruda",
+        l.addView(label("DEVTOOLS (Eruda)"));
+        Button devToolsBtn = accentBtn(
+            devToolsActive ? "Hide DevTools" : "Show DevTools",
             null
         );
-        erudaBtn.setOnClickListener(v -> {
-            if (!erudaActive) {
-                injectEruda(() -> {
-                    erudaActive = true;
-                    erudaBtn.setText("Hide Eruda Panel");
+        devToolsBtn.setOnClickListener(v -> {
+            if (!devToolsActive) {
+                injectDevTools(() -> {
+                    devToolsActive = true;
+                    devToolsBtn.setText("Hide DevTools");
                 });
             } else {
-                webView.evaluateJavascript("eruda.hide();", null);
-                erudaActive = false;
-                erudaBtn.setText("Inject & Show Eruda");
+                webView.evaluateJavascript("if(window.eruda) eruda.hide();", null);
+                devToolsActive = false;
+                devToolsBtn.setText("Show DevTools");
             }
         });
-        l.addView(erudaBtn);
+        l.addView(devToolsBtn);
 
         l.addView(label("DISPLAY MODE"));
         Button desktopBtn = btn(
@@ -340,7 +399,6 @@ public class MainActivity extends AppCompatActivity {
                 "(function(){return document.documentElement.outerHTML;})()",
                 src -> runOnUiThread(() -> {
                     if (src != null) {
-                        // Open source in a new page
                         String encoded = android.util.Base64.encodeToString(
                             src.getBytes(), android.util.Base64.DEFAULT);
                         webView.loadUrl("data:text/plain;base64," + encoded);
@@ -387,6 +445,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  TAB: Search Engine Selection
+    // ═══════════════════════════════════════════════════════════════════════
+    private View tabSearch() {
+        LinearLayout l = column();
+        l.addView(label("SEARCH ENGINE"));
+
+        for (int i = 0; i < SEARCH_NAMES.length; i++) {
+            final int idx = i;
+            Button btn = btn(SEARCH_NAMES[i] + (i == currentSearchEngine ? " ✓" : ""), v -> {
+                currentSearchEngine = idx;
+                Toast.makeText(this, "Search engine: " + SEARCH_NAMES[idx], Toast.LENGTH_SHORT).show();
+                // Refresh the view
+                renderTab((FrameLayout) l.getParent(), 1, null);
+            });
+            if (i == currentSearchEngine) {
+                btn.setBackgroundColor(0xFF3D3665);
+            }
+            l.addView(btn);
+        }
+
+        return l;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  TAB: User Agent
     // ═══════════════════════════════════════════════════════════════════════
     private View tabUA() {
@@ -403,7 +485,7 @@ public class MainActivity extends AppCompatActivity {
             final String ua   = values[i];
             final String name = names[i];
             l.addView(btn(name, v -> {
-                webView.getSettings().setUserAgentString(ua); // null resets to default
+                webView.getSettings().setUserAgentString(ua);
                 webView.reload();
                 current.setText("Current UA:\n" + webView.getSettings().getUserAgentString());
                 Toast.makeText(this, "Applied: " + name, Toast.LENGTH_SHORT).show();
@@ -604,7 +686,6 @@ public class MainActivity extends AppCompatActivity {
             sm.add(n, c);
             nameIn.setText("");
             codeIn.setText("");
-            // Re-render snippets list
             refreshSnippetList(l, sm, 3);
             Toast.makeText(this, "Snippet saved!", Toast.LENGTH_SHORT).show();
         }));
@@ -616,7 +697,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void refreshSnippetList(LinearLayout parent, SnippetManager sm, int listStartIdx) {
-        // Remove all views after the static header area
         while (parent.getChildCount() > listStartIdx) {
             parent.removeViewAt(parent.getChildCount() - 1);
         }
@@ -725,9 +805,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  ERUDA INJECT
+    //  DEVTOOLS INJECT (Eruda)
     // ═══════════════════════════════════════════════════════════════════════
-    private void injectEruda(Runnable onSuccess) {
+    private void injectDevTools(Runnable onSuccess) {
         new Thread(() -> {
             try {
                 BufferedReader reader = new BufferedReader(
@@ -746,7 +826,7 @@ public class MainActivity extends AppCompatActivity {
                 );
             } catch (Exception e) {
                 runOnUiThread(() ->
-                    Toast.makeText(this, "Eruda load failed: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "DevTools load failed: " + e.getMessage(), Toast.LENGTH_LONG).show()
                 );
             }
         }).start();

@@ -38,12 +38,29 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(grep "versionName" app/build.gradle | awk '{print $2}' | tr -d '"')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
         with:
-          name: FeatherX-Browser-release
-          path: app/build/outputs/apk/release/*.apk
-          retention-days: 30
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: FeatherX Browser ${{ steps.version.outputs.version }}
+          body: |
+            Automated release from commit ${{ github.sha }}
+            
+            ### Changes
+            See [commit history](https://github.com/${{ github.repository }}/commits/main)
+          files: app/build/outputs/apk/release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: APK info
         run: |

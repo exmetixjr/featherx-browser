@@ -1,6 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#7C6AF7" />
-    <corners android:radius="12dp" />
-</shape>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    
+    <!-- Feather shape -->
+    <!-- Main stem -->
+    <path
+        android:fillColor="#7C6AF7"
+        android:pathData="M24,4 L26,6 L26,42 L24,44 L22,42 L22,6 Z" />
+    
+    <!-- Left barbs -->
+    <path
+        android:fillColor="#7C6AF7"
+        android:pathData="M24,12 L12,8 L14,10 L24,16 Z" />
+    <path
+        android:fillColor="#7C6AF7"
+        android:pathData="M24,20 L10,16 L12,18 L24,24 Z" />
+    <path
+        android:fillColor="#7C6AF7"
+        android:pathData="M24,28 L12,24 L14,26 L24,32 Z" />
+    <path
+        android:fillColor="#7C6AF7"
+        android:pathData="M24,36 L14,32 L16,34 L24,40 Z" />
+    
+    <!-- Right barbs -->
+    <path
+        android:fillColor="#9B8AF7"
+        android:pathData="M24,12 L36,8 L34,10 L24,16 Z" />
+    <path
+        android:fillColor="#9B8AF7"
+        android:pathData="M24,20 L38,16 L36,18 L24,24 Z" />
+    <path
+        android:fillColor="#9B8AF7"
+        android:pathData="M24,28 L36,24 L34,26 L24,32 Z" />
+    <path
+        android:fillColor="#9B8AF7"
+        android:pathData="M24,36 L34,32 L32,34 L24,40 Z" />
+</vector>
