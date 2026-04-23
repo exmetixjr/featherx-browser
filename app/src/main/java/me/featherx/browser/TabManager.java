@@ -26,7 +26,6 @@ public class TabManager {
     private int currentTabIndex = -1;
     private Context context;
     private TabManagerListener listener;
-    private WebView sharedWebView; // Main visible WebView
 
     public interface TabManagerListener {
         void onTabChanged(Tab newTab, WebView newWebView);

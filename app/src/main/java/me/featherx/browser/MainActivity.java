@@ -3,6 +3,7 @@ package me.featherx.browser;
 import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.text.InputType;
@@ -29,9 +30,8 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    // ── State ──────────────────────────────────────────────────────
     private TabManager tabManager;
-    private WebView  webView;
+    private WebView webView;
     private EditText urlBar;
     private ProgressBar progressBar;
     private boolean devToolsActive = false;
@@ -46,36 +46,35 @@ public class MainActivity extends AppCompatActivity {
         "https://search.yahoo.com/search?p="
     };
     private static final String[] SEARCH_NAMES = {"Google", "Bing", "DuckDuckGo", "Yahoo"};
-
     private static final String HOME = "https://www.google.com";
 
-    // ── Lifecycle ──────────────────────────────────────────────────
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        webView     = findViewById(R.id.webview);
-        urlBar      = findViewById(R.id.url_bar);
+        webView = findViewById(R.id.webview);
+        urlBar = findViewById(R.id.url_bar);
         progressBar = findViewById(R.id.progress_bar);
 
-        // Initialize TabManager
         tabManager = new TabManager(this);
-        tabManager.setListener((tab, newWebView) -> {
-            ViewGroup parent = (ViewGroup) webView.getParent();
-            int index = parent.indexOfChild(webView);
-            parent.removeView(webView);
-            webView = newWebView;
-            parent.addView(webView, index);
-            urlBar.setText(tab.url);
-            devToolsActive = false;
+        tabManager.setListener(new TabManager.TabManagerListener() {
+            @Override
+            public void onTabChanged(TabManager.Tab tab, WebView newWebView) {
+                ViewGroup parent = (ViewGroup) webView.getParent();
+                int index = parent.indexOfChild(webView);
+                parent.removeView(webView);
+                webView = newWebView;
+                parent.addView(webView, index);
+                urlBar.setText(tab.url);
+                devToolsActive = false;
+            }
         });
 
         setupWebViewForMain();
         setupUrlBar();
         setupNavButtons();
-
         webView.loadUrl(HOME);
     }
 
@@ -85,7 +84,6 @@ public class MainActivity extends AppCompatActivity {
         else super.onBackPressed();
     }
 
-    // ── WebView Setup ──────────────────────────────────────────────
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     private void setupWebViewForMain() {
         WebSettings s = webView.getSettings();
@@ -119,7 +117,6 @@ public class MainActivity extends AppCompatActivity {
                 progressBar.setVisibility(View.GONE);
                 urlBar.setText(url);
                 CookieManager.getInstance().flush();
-                // Update tab manager
                 TabManager.Tab tab = tabManager.getCurrentTab();
                 if (tab != null) {
                     tab.url = url;
@@ -142,17 +139,19 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // ── URL Bar ────────────────────────────────────────────────────
     private void setupUrlBar() {
-        urlBar.setOnEditorActionListener((v, actionId, event) -> {
-            boolean go = actionId == EditorInfo.IME_ACTION_GO
-                || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
-                    && event.getAction() == KeyEvent.ACTION_DOWN);
-            if (go) {
-                navigate(urlBar.getText().toString().trim());
-                return true;
+        urlBar.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                boolean go = actionId == EditorInfo.IME_ACTION_GO
+                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == KeyEvent.ACTION_DOWN);
+                if (go) {
+                    navigate(urlBar.getText().toString().trim());
+                    return true;
+                }
+                return false;
             }
-            return false;
         });
     }
 
@@ -172,61 +171,122 @@ public class MainActivity extends AppCompatActivity {
         imm.hideSoftInputFromWindow(urlBar.getWindowToken(), 0);
     }
 
-    // ── Navigation Buttons ─────────────────────────────────────────
     private void setupNavButtons() {
-        findViewById(R.id.btn_reload_top).setOnClickListener(v -> webView.reload());
-        findViewById(R.id.btn_tabs_top).setOnClickListener(v -> showTabSwitcher());
-        findViewById(R.id.btn_home).setOnClickListener(v -> webView.loadUrl(HOME));
-        findViewById(R.id.btn_tools).setOnClickListener(v -> openToolsSheet());
+        findViewById(R.id.btn_reload_top).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.reload();
+            }
+        });
+        findViewById(R.id.btn_tabs_top).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showTabSwitcher();
+            }
+        });
+        findViewById(R.id.btn_home).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.loadUrl(HOME);
+            }
+        });
+        findViewById(R.id.btn_tools).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openToolsSheet();
+            }
+        });
     }
 
-    // ── Tab Management ────────────────────────────────────────────
     private void showTabSwitcher() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Tabs (" + tabManager.getTabCount() + ")");
 
-        List<TabManager.Tab> tabs = tabManager.getAllTabs();
+        final List<TabManager.Tab> tabs = tabManager.getAllTabs();
         String[] items = new String[tabs.size()];
         for (int i = 0; i < tabs.size(); i++) {
             TabManager.Tab tab = tabs.get(i);
-            String title = tab.title != null && !tab.title.isEmpty() ? tab.title : "New Tab";
-            String url = tab.url != null && !tab.url.isEmpty() ? tab.url : "about:blank";
-            items[i] = (tab.isIncognito ? "🔒 " : "") + title + "\n" + url;
+            String title = (tab.title != null && !tab.title.isEmpty()) ? tab.title : "New Tab";
+            String url = (tab.url != null && !tab.url.isEmpty()) ? tab.url : "about:blank";
+            items[i] = (tab.isIncognito ? "[Incognito] " : "") + title + "\n" + url;
         }
 
-        builder.setItems(items, (dialog, which) -> tabManager.switchToTab(which));
-        builder.setPositiveButton("New Tab", (dialog, which) -> {
-            TabManager.Tab newTab = tabManager.createTab(incognitoMode);
-            // Need to create WebView for this tab
-            WebView newWebView = new WebView(this);
-            // Copy settings from current WebView
-            newWebView.getSettings().setJavaScriptEnabled(true);
-            newWebView.getSettings().setDomStorageEnabled(true);
-            // ... more settings
-            tabManager.initWebViewForTab(newTab, newWebView);
-            newWebView.loadUrl(HOME);
+        builder.setItems(items, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                tabManager.switchToTab(which);
+            }
         });
-        builder.setNegativeButton("Close Tab", (dialog, which) -> {
-            tabManager.closeTab(tabManager.getCurrentIndex());
+        builder.setPositiveButton("New Tab", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                TabManager.Tab newTab = tabManager.createTab(incognitoMode);
+                WebView newWebView = new WebView(MainActivity.this);
+                WebSettings ns = newWebView.getSettings();
+                ns.setJavaScriptEnabled(true);
+                ns.setDomStorageEnabled(true);
+                ns.setDatabaseEnabled(true);
+                ns.setAllowFileAccess(true);
+                ns.setSupportZoom(true);
+                ns.setBuiltInZoomControls(true);
+                ns.setDisplayZoomControls(false);
+                ns.setUseWideViewPort(true);
+                ns.setLoadWithOverviewMode(true);
+                ns.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                ns.setMediaPlaybackRequiresUserGesture(false);
+                if (incognitoMode) {
+                    ns.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                    CookieManager.getInstance().setAcceptCookie(false);
+                } else {
+                    CookieManager.getInstance().setAcceptCookie(true);
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(newWebView, true);
+                }
+                newWebView.addJavascriptInterface(new WebAppInterface(MainActivity.this, newWebView), "FeatherX");
+                newWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageStarted(WebView v, String url, android.graphics.Bitmap fav) {
+                        TabManager.Tab t = tabManager.getCurrentTab();
+                        if (t != null) {
+                            t.url = url;
+                        }
+                    }
+                    @Override
+                    public void onPageFinished(WebView v, String url) {
+                        TabManager.Tab t = tabManager.getCurrentTab();
+                        if (t != null) {
+                            t.url = url;
+                            t.title = v.getTitle();
+                        }
+                    }
+                });
+                tabManager.initWebViewForTab(newTab, newWebView);
+                newWebView.loadUrl(HOME);
+            }
         });
-        builder.setNeutralButton("Incognito: " + (incognitoMode ? "ON" : "OFF"), (dialog, which) -> {
-            incognitoMode = !incognitoMode;
-            Toast.makeText(this, "New tabs will be " + (incognitoMode ? "incognito" : "normal"), Toast.LENGTH_SHORT).show();
+        builder.setNegativeButton("Close Tab", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                tabManager.closeTab(tabManager.getCurrentIndex());
+            }
+        });
+        builder.setNeutralButton("Incognito: " + (incognitoMode ? "ON" : "OFF"), new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                incognitoMode = !incognitoMode;
+                Toast.makeText(MainActivity.this, "New tabs will be " + (incognitoMode ? "incognito" : "normal"), Toast.LENGTH_SHORT).show();
+            }
         });
         builder.show();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TOOLS BOTTOM SHEET
-    // ═══════════════════════════════════════════════════════════════════════
     private void openToolsSheet() {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
         View root = LayoutInflater.from(this).inflate(R.layout.bottom_sheet_tools, null);
         sheet.setContentView(root);
         sheet.getBehavior().setPeekHeight(560);
 
-        TabLayout tabs    = root.findViewById(R.id.tool_tabs);
-        FrameLayout frame = root.findViewById(R.id.tool_content);
+        TabLayout tabs = root.findViewById(R.id.tool_tabs);
+        final FrameLayout frame = root.findViewById(R.id.tool_content);
 
         String[] tabNames = {"DevTools", "Search", "UA", "JS Inject", "Cookies", "Storage", "Snippets", "Runner"};
         for (String name : tabNames) tabs.addTab(tabs.newTab().setText(name));
@@ -234,13 +294,15 @@ public class MainActivity extends AppCompatActivity {
         renderTab(frame, 0, sheet);
 
         tabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
-            @Override public void onTabSelected(TabLayout.Tab tab) {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
                 renderTab(frame, tab.getPosition(), sheet);
             }
-            @Override public void onTabUnselected(TabLayout.Tab t) {}
-            @Override public void onTabReselected(TabLayout.Tab t) {}
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {}
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {}
         });
-
         sheet.show();
     }
 
@@ -249,16 +311,15 @@ public class MainActivity extends AppCompatActivity {
         switch (idx) {
             case 0: frame.addView(tabDevTools()); break;
             case 1: frame.addView(tabSearch()); break;
-            case 2: frame.addView(tabUA());       break;
+            case 2: frame.addView(tabUA()); break;
             case 3: frame.addView(tabJSInject()); break;
-            case 4: frame.addView(tabCookies());  break;
-            case 5: frame.addView(tabStorage());  break;
+            case 4: frame.addView(tabCookies()); break;
+            case 5: frame.addView(tabStorage()); break;
             case 6: frame.addView(tabSnippets()); break;
-            case 7: frame.addView(tabRunner());   break;
+            case 7: frame.addView(tabRunner()); break;
         }
     }
 
-    // ── Helpers ────────────────────────────────────────────────────
     private LinearLayout column() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -356,343 +417,438 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "Copied!", Toast.LENGTH_SHORT).show();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: DevTools (Eruda-based)
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabDevTools() {
         LinearLayout l = column();
-
         l.addView(label("DEVTOOLS (Eruda)"));
         Button devToolsBtn = accentBtn(
             devToolsActive ? "Hide DevTools" : "Show DevTools",
-            null
-        );
-        devToolsBtn.setOnClickListener(v -> {
-            if (!devToolsActive) {
-                injectDevTools(() -> {
-                    devToolsActive = true;
-                    devToolsBtn.setText("Hide DevTools");
-                });
-            } else {
-                webView.evaluateJavascript("if(window.eruda) eruda.hide();", null);
-                devToolsActive = false;
-                devToolsBtn.setText("Show DevTools");
+            new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (!devToolsActive) {
+                        injectDevTools(new Runnable() {
+                            @Override
+                            public void run() {
+                                devToolsActive = true;
+                                ((Button)v).setText("Hide DevTools");
+                            }
+                        });
+                    } else {
+                        webView.evaluateJavascript("if(window.eruda) eruda.hide();", null);
+                        devToolsActive = false;
+                        ((Button)v).setText("Show DevTools");
+                    }
+                }
             }
-        });
+        );
         l.addView(devToolsBtn);
 
         l.addView(label("DISPLAY MODE"));
         Button desktopBtn = btn(
             desktopMode ? "Switch to Mobile Mode" : "Switch to Desktop Mode",
-            null
+            new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    desktopMode = !desktopMode;
+                    applyDesktopMode(desktopMode);
+                    ((Button)v).setText(desktopMode ? "Switch to Mobile Mode" : "Switch to Desktop Mode");
+                }
+            }
         );
-        desktopBtn.setOnClickListener(v -> {
-            desktopMode = !desktopMode;
-            applyDesktopMode(desktopMode);
-            desktopBtn.setText(desktopMode ? "Switch to Mobile Mode" : "Switch to Desktop Mode");
-        });
         l.addView(desktopBtn);
 
         l.addView(label("PAGE SOURCE"));
-        l.addView(btn("View Page Source", v ->
-            webView.evaluateJavascript(
-                "(function(){return document.documentElement.outerHTML;})()",
-                src -> runOnUiThread(() -> {
-                    if (src != null) {
-                        String encoded = android.util.Base64.encodeToString(
-                            src.getBytes(), android.util.Base64.DEFAULT);
-                        webView.loadUrl("data:text/plain;base64," + encoded);
+        l.addView(btn("View Page Source", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.evaluateJavascript(
+                    "(function(){return document.documentElement.outerHTML;})()",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String src) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (src != null) {
+                                        String encoded = android.util.Base64.encodeToString(
+                                            src.getBytes(), android.util.Base64.DEFAULT);
+                                        webView.loadUrl("data:text/plain;base64," + encoded);
+                                    }
+                                }
+                            });
+                        }
                     }
-                })
-            )
-        ));
+                );
+            }
+        }));
 
         l.addView(label("PAGE INFO"));
         TextView infoView = output("Tap to load page info...");
         l.addView(infoView);
-        l.addView(btn("Load Page Info", v ->
-            webView.evaluateJavascript(
-                "(function(){return JSON.stringify({" +
-                "url:location.href," +
-                "title:document.title," +
-                "referrer:document.referrer," +
-                "charset:document.characterSet," +
-                "cookies:document.cookie.split(';').length," +
-                "scripts:document.scripts.length," +
-                "images:document.images.length," +
-                "links:document.links.length" +
-                "});})()",
-                result -> runOnUiThread(() -> {
-                    try {
-                        JSONObject o = new JSONObject(result.replace("\\\"", "\"").replaceAll("^\"|\"$", ""));
-                        StringBuilder sb = new StringBuilder();
-                        sb.append("URL: ").append(o.optString("url")).append("\n");
-                        sb.append("Title: ").append(o.optString("title")).append("\n");
-                        sb.append("Charset: ").append(o.optString("charset")).append("\n");
-                        sb.append("Cookies: ").append(o.optInt("cookies")).append("\n");
-                        sb.append("Scripts: ").append(o.optInt("scripts")).append("\n");
-                        sb.append("Images: ").append(o.optInt("images")).append("\n");
-                        sb.append("Links: ").append(o.optInt("links"));
-                        infoView.setText(sb.toString());
-                    } catch (Exception e) {
-                        infoView.setText(result);
+        l.addView(btn("Load Page Info", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.evaluateJavascript(
+                    "(function(){return JSON.stringify({" +
+                    "url:location.href," +
+                    "title:document.title," +
+                    "referrer:document.referrer," +
+                    "charset:document.characterSet," +
+                    "cookies:document.cookie.split(';').length," +
+                    "scripts:document.scripts.length," +
+                    "images:document.images.length," +
+                    "links:document.links.length" +
+                    "});})()",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String result) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        JSONObject o = new JSONObject(result.replace("\\\"", "\"").replaceAll("^\"|\"$", ""));
+                                        StringBuilder sb = new StringBuilder();
+                                        sb.append("URL: ").append(o.optString("url")).append("\n");
+                                        sb.append("Title: ").append(o.optString("title")).append("\n");
+                                        sb.append("Charset: ").append(o.optString("charset")).append("\n");
+                                        sb.append("Cookies: ").append(o.optInt("cookies")).append("\n");
+                                        sb.append("Scripts: ").append(o.optInt("scripts")).append("\n");
+                                        sb.append("Images: ").append(o.optInt("images")).append("\n");
+                                        sb.append("Links: ").append(o.optInt("links"));
+                                        infoView.setText(sb.toString());
+                                    } catch (Exception e) {
+                                        infoView.setText(result);
+                                    }
+                                }
+                            });
+                        }
                     }
-                })
-            )
-        ));
+                );
+            }
+        }));
 
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: Search Engine Selection
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabSearch() {
         LinearLayout l = column();
         l.addView(label("SEARCH ENGINE"));
-
         for (int i = 0; i < SEARCH_NAMES.length; i++) {
             final int idx = i;
-            Button btn = btn(SEARCH_NAMES[i] + (i == currentSearchEngine ? " ✓" : ""), v -> {
-                currentSearchEngine = idx;
-                Toast.makeText(this, "Search engine: " + SEARCH_NAMES[idx], Toast.LENGTH_SHORT).show();
-                // Refresh the view
-                renderTab((FrameLayout) l.getParent(), 1, null);
-            });
+            Button b = btn(SEARCH_NAMES[i] + (i == currentSearchEngine ? " ✓" : ""),
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        currentSearchEngine = idx;
+                        Toast.makeText(MainActivity.this, "Search engine: " + SEARCH_NAMES[idx], Toast.LENGTH_SHORT).show();
+                        renderTab((FrameLayout)((View)v).getParent().getParent(), 1, null);
+                    }
+                }
+            );
             if (i == currentSearchEngine) {
-                btn.setBackgroundColor(0xFF3D3665);
+                b.setBackgroundColor(0xFF3D3665);
             }
-            l.addView(btn);
+            l.addView(b);
         }
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: User Agent
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabUA() {
         LinearLayout l = column();
-
         TextView current = output("Current UA:\n" + webView.getSettings().getUserAgentString());
         l.addView(current);
-        l.addView(btn("Copy Current UA", v -> copy(webView.getSettings().getUserAgentString(), "UA")));
-
+        l.addView(btn("Copy Current UA", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copy(webView.getSettings().getUserAgentString(), "UA");
+            }
+        }));
         l.addView(label("PRESETS"));
-        String[] names  = UAProfiles.getNames();
+        String[] names = UAProfiles.getNames();
         String[] values = UAProfiles.getValues();
         for (int i = 0; i < names.length; i++) {
-            final String ua   = values[i];
+            final String ua = values[i];
             final String name = names[i];
-            l.addView(btn(name, v -> {
+            l.addView(btn(name, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    webView.getSettings().setUserAgentString(ua);
+                    webView.reload();
+                    current.setText("Current UA:\n" + webView.getSettings().getUserAgentString());
+                    Toast.makeText(MainActivity.this, "Applied: " + name, Toast.LENGTH_SHORT).show();
+                }
+            }));
+        }
+        l.addView(label("CUSTOM UA"));
+        final EditText customInput = input("Paste custom user agent…");
+        customInput.setText(savedCustomUA);
+        l.addView(customInput);
+        l.addView(accentBtn("Apply Custom UA", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String ua = customInput.getText().toString().trim();
+                if (ua.isEmpty()) { Toast.makeText(MainActivity.this, "UA empty", Toast.LENGTH_SHORT).show(); return; }
+                savedCustomUA = ua;
                 webView.getSettings().setUserAgentString(ua);
                 webView.reload();
                 current.setText("Current UA:\n" + webView.getSettings().getUserAgentString());
-                Toast.makeText(this, "Applied: " + name, Toast.LENGTH_SHORT).show();
-            }));
-        }
-
-        l.addView(label("CUSTOM UA"));
-        EditText customInput = input("Paste custom user agent…");
-        customInput.setText(savedCustomUA);
-        l.addView(customInput);
-        l.addView(accentBtn("Apply Custom UA", v -> {
-            String ua = customInput.getText().toString().trim();
-            if (ua.isEmpty()) { Toast.makeText(this, "UA empty", Toast.LENGTH_SHORT).show(); return; }
-            savedCustomUA = ua;
-            webView.getSettings().setUserAgentString(ua);
-            webView.reload();
-            current.setText("Current UA:\n" + webView.getSettings().getUserAgentString());
+            }
         }));
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: JS Inject
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabJSInject() {
         LinearLayout l = column();
-
         l.addView(label("INJECT JAVASCRIPT"));
-        EditText code = multiInput("// your JS here…", 7);
+        final EditText code = multiInput("// your JS here…", 7);
         l.addView(code);
-
-        TextView result = output("Result: (none)");
+        final TextView result = output("Result: (none)");
         l.addView(result);
-
-        l.addView(accentBtn("Run", v -> {
-            String js = code.getText().toString().trim();
-            if (js.isEmpty()) return;
-            webView.evaluateJavascript(
-                "(function(){try{return String(eval(" + JSONObject.quote(js) + "));}catch(e){return'Error: '+e.message;}})()",
-                val -> runOnUiThread(() -> result.setText("Result: " + val))
-            );
+        l.addView(accentBtn("Run", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String js = code.getText().toString().trim();
+                if (js.isEmpty()) return;
+                webView.evaluateJavascript(
+                    "(function(){try{return String(eval(" + JSONObject.quote(js) + "));}catch(e){return'Error: '+e.message;}})()",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String val) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    result.setText("Result: " + val);
+                                }
+                            });
+                        }
+                    }
+                );
+            }
         }));
-        l.addView(btn("Clear", v -> {
-            code.setText("");
-            result.setText("Result: (none)");
+        l.addView(btn("Clear", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                code.setText("");
+                result.setText("Result: (none)");
+            }
         }));
-        l.addView(btn("Copy Code", v -> copy(code.getText().toString(), "JS")));
-
+        l.addView(btn("Copy Code", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copy(code.getText().toString(), "JS");
+            }
+        }));
         l.addView(label("QUICK INJECT"));
         String[][] quick = {
-            {"Remove Ads (basic)",  "document.querySelectorAll('iframe,[class*=ad],[id*=ad]').forEach(e=>e.remove())"},
-            {"Dark Mode",           "document.body.style.filter='invert(1) hue-rotate(180deg)'"},
-            {"Scroll to Top",       "window.scrollTo(0,0)"},
-            {"Scroll to Bottom",    "window.scrollTo(0,document.body.scrollHeight)"},
-            {"Copy All Text",       "navigator.clipboard.writeText(document.body.innerText)"},
-            {"Count Links",         "document.links.length"},
-            {"Disable Images",      "document.querySelectorAll('img').forEach(e=>e.style.display='none')"},
+            {"Remove Ads (basic)", "document.querySelectorAll('iframe,[class*=ad],[id*=ad]').forEach(e=>e.remove())"},
+            {"Dark Mode", "document.body.style.filter='invert(1) hue-rotate(180deg)'"},
+            {"Scroll to Top", "window.scrollTo(0,0)"},
+            {"Scroll to Bottom", "window.scrollTo(0,document.body.scrollHeight)"},
+            {"Copy All Text", "navigator.clipboard.writeText(document.body.innerText)"},
+            {"Count Links", "document.links.length"},
+            {"Disable Images", "document.querySelectorAll('img').forEach(e=>e.style.display='none')"},
         };
-        for (String[] pair : quick) {
-            l.addView(btn("▶ " + pair[0], v -> {
-                code.setText(pair[1]);
-                webView.evaluateJavascript(
-                    "(function(){try{return String(eval(" + JSONObject.quote(pair[1]) + "));}catch(e){return'Error: '+e.message;}})()",
-                    val -> runOnUiThread(() -> result.setText("Result: " + val))
-                );
+        for (final String[] pair : quick) {
+            l.addView(btn("▶ " + pair[0], new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    code.setText(pair[1]);
+                    webView.evaluateJavascript(
+                        "(function(){try{return String(eval(" + JSONObject.quote(pair[1]) + "));}catch(e){return'Error: '+e.message;}})()",
+                        new android.webkit.ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String val) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        result.setText("Result: " + val);
+                                    }
+                                });
+                            }
+                        }
+                    );
+                }
             }));
         }
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: Cookies
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabCookies() {
         LinearLayout l = column();
-
-        String url     = webView.getUrl() != null ? webView.getUrl() : "";
+        String url = webView.getUrl() != null ? webView.getUrl() : "";
         String cookies = CookieManager.getInstance().getCookie(url);
         if (cookies == null) cookies = "(no cookies for this domain)";
-
-        TextView cookieView = output(cookies);
+        final TextView cookieView = output(cookies);
         l.addView(cookieView);
-
         final String finalCookies = cookies;
-        l.addView(btn("Copy All Cookies", v -> copy(finalCookies, "Cookies")));
-
+        l.addView(btn("Copy All Cookies", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copy(finalCookies, "Cookies");
+            }
+        }));
         l.addView(label("SET COOKIE"));
-        EditText nameIn  = input("name");
-        EditText valueIn = input("value");
-        EditText domIn   = input("domain (leave blank = current)");
+        final EditText nameIn = input("name");
+        final EditText valueIn = input("value");
+        final EditText domIn = input("domain (leave blank = current)");
         l.addView(nameIn);
         l.addView(valueIn);
         l.addView(domIn);
-        l.addView(accentBtn("Set Cookie", v -> {
-            String n = nameIn.getText().toString().trim();
-            String val = valueIn.getText().toString().trim();
-            String dom = domIn.getText().toString().trim();
-            if (dom.isEmpty()) dom = android.net.Uri.parse(url).getHost();
-            String cookieStr = n + "=" + val + "; domain=" + dom + "; path=/";
-            CookieManager.getInstance().setCookie(url, cookieStr);
-            CookieManager.getInstance().flush();
-            Toast.makeText(this, "Cookie set", Toast.LENGTH_SHORT).show();
+        l.addView(accentBtn("Set Cookie", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String n = nameIn.getText().toString().trim();
+                String val = valueIn.getText().toString().trim();
+                String dom = domIn.getText().toString().trim();
+                if (dom.isEmpty()) dom = android.net.Uri.parse(url).getHost();
+                String cookieStr = n + "=" + val + "; domain=" + dom + "; path=/";
+                CookieManager.getInstance().setCookie(url, cookieStr);
+                CookieManager.getInstance().flush();
+                Toast.makeText(MainActivity.this, "Cookie set", Toast.LENGTH_SHORT).show();
+            }
         }));
-
         l.addView(label("CLEAR"));
-        l.addView(dangerBtn("Clear All Cookies", v -> {
-            CookieManager.getInstance().removeAllCookies(null);
-            CookieManager.getInstance().flush();
-            cookieView.setText("(all cookies cleared)");
-            Toast.makeText(this, "All cookies cleared", Toast.LENGTH_SHORT).show();
+        l.addView(dangerBtn("Clear All Cookies", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                CookieManager.getInstance().removeAllCookies(null);
+                CookieManager.getInstance().flush();
+                cookieView.setText("(all cookies cleared)");
+                Toast.makeText(MainActivity.this, "All cookies cleared", Toast.LENGTH_SHORT).show();
+            }
         }));
-        l.addView(dangerBtn("Clear Session Cookies", v -> {
-            CookieManager.getInstance().removeSessionCookies(null);
-            CookieManager.getInstance().flush();
-            Toast.makeText(this, "Session cookies cleared", Toast.LENGTH_SHORT).show();
+        l.addView(dangerBtn("Clear Session Cookies", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                CookieManager.getInstance().removeSessionCookies(null);
+                CookieManager.getInstance().flush();
+                Toast.makeText(MainActivity.this, "Session cookies cleared", Toast.LENGTH_SHORT).show();
+            }
         }));
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: Storage (localStorage + sessionStorage)
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabStorage() {
         LinearLayout l = column();
-
         l.addView(label("LOCAL STORAGE"));
-        TextView lsView = output("Loading…");
+        final TextView lsView = output("Loading…");
         l.addView(lsView);
-
-        Runnable reloadLS = () -> webView.evaluateJavascript(
-            "(function(){var r={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);r[k]=localStorage.getItem(k);}return JSON.stringify(r);})()",
-            val -> runOnUiThread(() -> lsView.setText(val != null ? val : "(empty)"))
-        );
+        final Runnable reloadLS = new Runnable() {
+            @Override
+            public void run() {
+                webView.evaluateJavascript(
+                    "(function(){var r={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);r[k]=localStorage.getItem(k);}return JSON.stringify(r);})()",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String val) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    lsView.setText(val != null ? val : "(empty)");
+                                }
+                            });
+                        }
+                    }
+                );
+            }
+        };
         reloadLS.run();
-
-        l.addView(btn("Refresh", v -> reloadLS.run()));
-
+        l.addView(btn("Refresh", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                reloadLS.run();
+            }
+        }));
         l.addView(label("SET ITEM"));
-        EditText keyIn = input("key");
-        EditText valIn = input("value");
+        final EditText keyIn = input("key");
+        final EditText valIn = input("value");
         l.addView(keyIn);
         l.addView(valIn);
-        l.addView(accentBtn("Set localStorage Item", v -> {
-            String k = keyIn.getText().toString().trim();
-            String val = valIn.getText().toString().trim();
-            if (k.isEmpty()) return;
-            webView.evaluateJavascript(
-                "localStorage.setItem(" + JSONObject.quote(k) + "," + JSONObject.quote(val) + ")",
-                r -> runOnUiThread(reloadLS)
-            );
+        l.addView(accentBtn("Set localStorage Item", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String k = keyIn.getText().toString().trim();
+                String val = valIn.getText().toString().trim();
+                if (k.isEmpty()) return;
+                webView.evaluateJavascript(
+                    "localStorage.setItem(" + JSONObject.quote(k) + "," + JSONObject.quote(val) + ")",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String r) {
+                            runOnUiThread(reloadLS);
+                        }
+                    }
+                );
+            }
         }));
-
         l.addView(label("REMOVE ITEM"));
-        EditText delKey = input("key to remove");
+        final EditText delKey = input("key to remove");
         l.addView(delKey);
-        l.addView(dangerBtn("Remove Item", v -> {
-            String k = delKey.getText().toString().trim();
-            if (k.isEmpty()) return;
-            webView.evaluateJavascript("localStorage.removeItem(" + JSONObject.quote(k) + ")", r ->
-                runOnUiThread(reloadLS)
-            );
+        l.addView(dangerBtn("Remove Item", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String k = delKey.getText().toString().trim();
+                if (k.isEmpty()) return;
+                webView.evaluateJavascript("localStorage.removeItem(" + JSONObject.quote(k) + ")",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String r) {
+                            runOnUiThread(reloadLS);
+                        }
+                    }
+                );
+            }
         }));
-
         l.addView(label("CLEAR"));
-        l.addView(dangerBtn("Clear localStorage", v -> {
-            webView.evaluateJavascript("localStorage.clear()", r -> runOnUiThread(reloadLS));
+        l.addView(dangerBtn("Clear localStorage", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.evaluateJavascript("localStorage.clear()",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String r) {
+                            runOnUiThread(reloadLS);
+                        }
+                    }
+                );
+            }
         }));
-        l.addView(dangerBtn("Clear sessionStorage", v -> {
-            webView.evaluateJavascript("sessionStorage.clear()", null);
-            Toast.makeText(this, "sessionStorage cleared", Toast.LENGTH_SHORT).show();
+        l.addView(dangerBtn("Clear sessionStorage", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                webView.evaluateJavascript("sessionStorage.clear()", null);
+                Toast.makeText(MainActivity.this, "sessionStorage cleared", Toast.LENGTH_SHORT).show();
+            }
         }));
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: Snippets
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabSnippets() {
         LinearLayout l = column();
-        SnippetManager sm = new SnippetManager(this);
-
+        final SnippetManager sm = new SnippetManager(this);
         l.addView(label("SAVE NEW SNIPPET"));
-        EditText nameIn = input("Snippet name");
-        EditText codeIn = multiInput("// JS code…", 4);
+        final EditText nameIn = input("Snippet name");
+        final EditText codeIn = multiInput("// JS code…", 4);
         l.addView(nameIn);
         l.addView(codeIn);
-        l.addView(accentBtn("Save Snippet", v -> {
-            String n = nameIn.getText().toString().trim();
-            String c = codeIn.getText().toString().trim();
-            if (n.isEmpty() || c.isEmpty()) {
-                Toast.makeText(this, "Name and code required", Toast.LENGTH_SHORT).show();
-                return;
+        l.addView(accentBtn("Save Snippet", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String n = nameIn.getText().toString().trim();
+                String c = codeIn.getText().toString().trim();
+                if (n.isEmpty() || c.isEmpty()) {
+                    Toast.makeText(MainActivity.this, "Name and code required", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                sm.add(n, c);
+                nameIn.setText("");
+                codeIn.setText("");
+                refreshSnippetList(l, sm, 3);
+                Toast.makeText(MainActivity.this, "Snippet saved!", Toast.LENGTH_SHORT).show();
             }
-            sm.add(n, c);
-            nameIn.setText("");
-            codeIn.setText("");
-            refreshSnippetList(l, sm, 3);
-            Toast.makeText(this, "Snippet saved!", Toast.LENGTH_SHORT).show();
         }));
-
         l.addView(label("SAVED SNIPPETS"));
         refreshSnippetList(l, sm, 3);
-
         return l;
     }
 
@@ -707,11 +863,10 @@ public class MainActivity extends AppCompatActivity {
         }
         for (int i = 0; i < all.length(); i++) {
             try {
-                JSONObject obj = all.getJSONObject(i);
+                final JSONObject obj = all.getJSONObject(i);
                 String name = obj.getString("name");
-                String code = obj.getString("code");
+                final String code = obj.getString("code");
                 final int idx = i;
-
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setBackgroundColor(0xFF1A1A1A);
@@ -720,7 +875,6 @@ public class MainActivity extends AppCompatActivity {
                 rowLp.setMargins(0, px(3), 0, px(3));
                 row.setLayoutParams(rowLp);
                 row.setPadding(px(8), 0, px(8), 0);
-
                 Button runBtn = new Button(this);
                 runBtn.setText("▶  " + name);
                 runBtn.setAllCaps(false);
@@ -728,22 +882,40 @@ public class MainActivity extends AppCompatActivity {
                 runBtn.setBackgroundColor(0x00000000);
                 LinearLayout.LayoutParams runLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                 runBtn.setLayoutParams(runLp);
-                runBtn.setOnClickListener(v ->
-                    webView.evaluateJavascript(
-                        "(function(){try{return String(eval(" + JSONObject.quote(code) + "));}catch(e){return'Error: '+e.message;}})()",
-                        result -> runOnUiThread(() -> Toast.makeText(this, result, Toast.LENGTH_LONG).show())
-                    )
-                );
-
+                runBtn.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        try {
+                            webView.evaluateJavascript(
+                                "(function(){try{return String(eval(" + JSONObject.quote(code) + "));}catch(e){return'Error: '+e.message;}})()",
+                                new android.webkit.ValueCallback<String>() {
+                                    @Override
+                                    public void onReceiveValue(String result) {
+                                        runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                Toast.makeText(MainActivity.this, result, Toast.LENGTH_LONG).show();
+                                            }
+                                        });
+                                    }
+                                }
+                            );
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
                 Button delBtn = new Button(this);
                 delBtn.setText("✕");
                 delBtn.setTextColor(0xFFCF6679);
                 delBtn.setBackgroundColor(0x00000000);
-                delBtn.setOnClickListener(v -> {
-                    sm.remove(idx);
-                    refreshSnippetList(parent, sm, listStartIdx);
+                delBtn.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        sm.remove(idx);
+                        refreshSnippetList(parent, sm, listStartIdx);
+                    }
                 });
-
                 row.addView(runBtn);
                 row.addView(delBtn);
                 parent.addView(row);
@@ -751,90 +923,114 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TAB: Code Runner (REPL)
-    // ═══════════════════════════════════════════════════════════════════════
     private View tabRunner() {
         LinearLayout l = column();
-
         l.addView(label("JS REPL — runs in page context"));
-        EditText code = multiInput("expression or statement…", 5);
+        final EditText code = multiInput("expression or statement…", 5);
         l.addView(code);
-
-        TextView out = output("// output appears here");
+        final TextView out = output("// output appears here");
         l.addView(out);
-
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-
-        Button runBtn = accentBtn("▶ Run", v -> {
-            String js = code.getText().toString().trim();
-            if (js.isEmpty()) return;
-            String wrapped = "(function(){try{return String(eval(" + JSONObject.quote(js) + "));}catch(e){return'⚠ '+e.message;}}())";
-            webView.evaluateJavascript(wrapped, result ->
-                runOnUiThread(() -> {
-                    String prev = out.getText().toString();
-                    String cleaned = result.replaceAll("^\"|\"$", "").replace("\\n", "\n").replace("\\\"", "\"");
-                    out.setText(prev + "\n> " + cleaned);
-                })
-            );
+        Button runBtn = accentBtn("▶ Run", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String js = code.getText().toString().trim();
+                if (js.isEmpty()) return;
+                String wrapped = "(function(){try{return String(eval(" + JSONObject.quote(js) + "));}catch(e){return'⚠ '+e.message;}}())";
+                webView.evaluateJavascript(wrapped,
+                    new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String result) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    String prev = out.getText().toString();
+                                    String cleaned = result.replaceAll("^\"|\"$", "").replace("\\n", "\n").replace("\\\"", "\"");
+                                    out.setText(prev + "\n> " + cleaned);
+                                }
+                            });
+                        }
+                    }
+                );
+            }
         });
         runBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        Button clearBtn = btn("Clear", v -> out.setText("// output appears here"));
+        Button clearBtn = btn("Clear", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                out.setText("// output appears here");
+            }
+        });
         clearBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
         row.addView(runBtn);
         row.addView(clearBtn);
         l.addView(row);
-        l.addView(btn("Copy Output", v -> copy(out.getText().toString(), "Output")));
-
+        l.addView(btn("Copy Output", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copy(out.getText().toString(), "Output");
+            }
+        }));
         l.addView(label("QUICK EXPRESSIONS"));
         String[][] exprs = {
-            {"navigator.userAgent",     "navigator.userAgent"},
-            {"window.innerWidth/Height","window.innerWidth + 'x' + window.innerHeight"},
-            {"performance.now()",       "performance.now()"},
-            {"document.readyState",     "document.readyState"},
-            {"localStorage length",     "localStorage.length"},
+            {"navigator.userAgent", "navigator.userAgent"},
+            {"window.innerWidth/Height", "window.innerWidth + 'x' + window.innerHeight"},
+            {"performance.now()", "performance.now()"},
+            {"document.readyState", "document.readyState"},
+            {"localStorage length", "localStorage.length"},
         };
-        for (String[] pair : exprs) {
-            l.addView(btn(pair[0], v -> code.setText(pair[1])));
+        for (final String[] pair : exprs) {
+            l.addView(btn(pair[0], new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    code.setText(pair[1]);
+                }
+            }));
         }
-
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DEVTOOLS INJECT (Eruda)
-    // ═══════════════════════════════════════════════════════════════════════
-    private void injectDevTools(Runnable onSuccess) {
-        new Thread(() -> {
-            try {
-                BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(getAssets().open("eruda.min.js")));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) { sb.append(line); sb.append('\n'); }
-                reader.close();
-                String js = sb.toString();
-                runOnUiThread(() ->
-                    webView.evaluateJavascript(js, v1 ->
-                        webView.evaluateJavascript("eruda.init();", v2 -> {
-                            if (onSuccess != null) runOnUiThread(onSuccess);
-                        })
-                    )
-                );
-            } catch (Exception e) {
-                runOnUiThread(() ->
-                    Toast.makeText(this, "DevTools load failed: " + e.getMessage(), Toast.LENGTH_LONG).show()
-                );
+    private void injectDevTools(final Runnable onSuccess) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(getAssets().open("eruda.min.js")));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) { sb.append(line); sb.append('\n'); }
+                    reader.close();
+                    final String js = sb.toString();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            webView.evaluateJavascript(js, new android.webkit.ValueCallback<String>() {
+                                @Override
+                                public void onReceiveValue(String v1) {
+                                    webView.evaluateJavascript("eruda.init();", new android.webkit.ValueCallback<String>() {
+                                        @Override
+                                        public void onReceiveValue(String v2) {
+                                            if (onSuccess != null) runOnUiThread(onSuccess);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "DevTools load failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
             }
         }).start();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DESKTOP MODE
-    // ═══════════════════════════════════════════════════════════════════════
     private void applyDesktopMode(boolean desktop) {
         WebSettings s = webView.getSettings();
         if (desktop) {
