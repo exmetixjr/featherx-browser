@@ -20,20 +20,32 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Generate release keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/release-key.keystore \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias featherx \
+            -storepass android \
+            -keypass android \
+            -dname "CN=FeatherX, OU=Dev, O=FeatherX, L=Unknown, ST=Unknown, C=US"
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FeatherX-Browser-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: FeatherX-Browser-release
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
 
       - name: APK info
         run: |
-          ls -lh app/build/outputs/apk/debug/
+          ls -lh app/build/outputs/apk/release/
           echo "Build complete ✓"

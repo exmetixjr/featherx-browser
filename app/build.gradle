@@ -14,6 +14,15 @@ android {
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        release {
+            storeFile file('release-key.keystore')
+            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'android'
+            keyAlias 'featherx'
+            keyPassword System.getenv('KEY_PASSWORD') ?: 'android'
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
@@ -21,7 +30,7 @@ android {
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
