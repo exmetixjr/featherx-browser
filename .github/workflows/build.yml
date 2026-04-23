@@ -17,11 +17,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Generate release keystore
+        run: |
+          cd app
+          echo -e "android\nandroid\nandroid\n\n\n\n\nyes" | keytool -genkeypair -v \
+            -keystore release-key.keystore \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias featherx \
+            -dname "CN=FeatherX, OU=Dev, O=FeatherX, L=Unknown, ST=Unknown, C=US"
+          cd ..
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Release APK with debug output
-        run: ./gradlew assembleRelease --stacktrace --info --no-daemon 2>&1
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace --no-daemon 2>&1
 
       - name: Upload APK
         if: always()
