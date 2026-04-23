@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- Top bar: URL input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:background="@color/bg_surface"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/url_bar"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:hint="@string/url_hint"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_hint"
+            android:textSize="13sp"
+            android:background="@drawable/bg_url_bar"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:singleLine="true"
+            android:imeOptions="actionGo"
+            android:inputType="textUri"
+            android:selectAllOnFocus="true" />
+
+    </LinearLayout>
+
+    <!-- Progress bar -->
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:progressTint="@color/accent"
+        android:visibility="gone" />
+
+    <!-- WebView -->
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Bottom nav bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:orientation="horizontal"
+        android:background="@color/bg_surface"
+        android:elevation="4dp">
+
+        <Button
+            android:id="@+id/btn_back"
+            style="@style/ToolBtn"
+            android:text="&#8592;" />
+
+        <Button
+            android:id="@+id/btn_forward"
+            style="@style/ToolBtn"
+            android:text="&#8594;" />
+
+        <Button
+            android:id="@+id/btn_refresh"
+            style="@style/ToolBtn"
+            android:text="&#8635;" />
+
+        <Button
+            android:id="@+id/btn_home"
+            style="@style/ToolBtn"
+            android:text="&#8962;" />
+
+        <Button
+            android:id="@+id/btn_tabs"
+            style="@style/ToolBtn"
+            android:text="&#9776;" />
+
+        <Button
+            android:id="@+id/btn_tools"
+            style="@style/ToolBtn"
+            android:textColor="@color/accent"
+            android:text="&#9881;" />
+
+    </LinearLayout>
+
+</LinearLayout>
