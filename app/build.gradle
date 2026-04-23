@@ -25,9 +25,14 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".debug"
-            versionNameSuffix "-debug"
+            // No applicationIdSuffix - causes issues
         }
+        release {
+            minifyEnabled false;
+            signingConfig signingConfigs.release;
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
         release {
             minifyEnabled false
             signingConfig signingConfigs.release
