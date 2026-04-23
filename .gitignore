@@ -1,0 +1,23 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+
+# Keystore (do NOT commit private signing keys)
+app/release-key.keystore
+app/*.keystore
+app/*.jks
+
+# OS / editor
+.DS_Store
+*.log
+*.swp
+
+# Replit
+.cache/
+.local/
+.agents/

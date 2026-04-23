@@ -4,12 +4,10 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <text>
+    <path
         android:fillColor="#720E9E"
-        android:text="Y"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:pathData="M3,5h4l3,5l3,-5h4l-5.5,9v5h-3v-5z" />
+    <path
+        android:fillColor="#720E9E"
+        android:pathData="M19,16a1.5,1.5 0 1,0 0,3a1.5,1.5 0 0,0 0,-3z" />
 </vector>

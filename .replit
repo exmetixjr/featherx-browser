@@ -16,15 +16,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Gradle Tasks"
+args = "Build APK"
 
 [[workflows.workflow]]
-name = "Gradle Tasks"
+name = "Build APK"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./gradlew tasks --no-daemon"
+args = "ANDROID_HOME=$HOME/android-sdk ./gradlew assembleDebug --no-daemon"
 
 [workflows.workflow.metadata]
 outputType = "console"

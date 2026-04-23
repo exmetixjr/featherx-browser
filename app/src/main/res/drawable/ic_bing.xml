@@ -4,12 +4,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <text
+    <path
         android:fillColor="#008373"
-        android:text="B"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:pathData="M5,3v15.5l5,-2.5v-5l7,3l-7,4l9.5,-4.5v-3l-9,-4l4,1.5v3l-4,-1.5v-7z" />
 </vector>

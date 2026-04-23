@@ -9,36 +9,38 @@
     <!-- Top bar -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="52dp"
         android:orientation="horizontal"
         android:background="@color/bg_surface"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:elevation="2dp"
         android:gravity="center_vertical">
 
-        <!-- Home icon -->
         <ImageButton
             android:id="@+id/btn_home"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackground"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_home"
-            android:scaleType="centerInside" />
+            android:scaleType="centerInside"
+            android:contentDescription="@string/btn_home" />
 
-        <!-- Search engine icon -->
         <ImageButton
             android:id="@+id/btn_search_engine"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackground"
-            android:scaleType="centerInside" />
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:scaleType="centerInside"
+            android:contentDescription="@string/btn_search_engine" />
 
-        <!-- URL/Search bar -->
         <EditText
             android:id="@+id/url_bar"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="38dp"
             android:layout_weight="1"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
             android:hint="@string/url_hint"
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_hint"
@@ -51,16 +53,15 @@
             android:inputType="textUri"
             android:selectAllOnFocus="true" />
 
-        <!-- New tab -->
         <ImageButton
             android:id="@+id/btn_new_tab"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackground"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_plus"
-            android:scaleType="centerInside" />
+            android:scaleType="centerInside"
+            android:contentDescription="@string/btn_new_tab" />
 
-        <!-- Tab count -->
         <FrameLayout
             android:layout_width="40dp"
             android:layout_height="40dp">
@@ -69,30 +70,37 @@
                 android:id="@+id/btn_tabs"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="?attr/selectableItemBackground"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_tabs"
-                android:scaleType="centerInside" />
+                android:scaleType="centerInside"
+                android:contentDescription="@string/btn_tabs" />
 
             <TextView
                 android:id="@+id/tab_count"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|end"
-                android:background="@color/accent"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/bg_tab_badge"
                 android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:paddingHorizontal="4dp"
-                android:gravity="center" />
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:minWidth="16dp"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="@string/tab_count" />
         </FrameLayout>
 
-        <!-- 3-dot menu -->
         <ImageButton
             android:id="@+id/btn_overflow"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:background="?attr/selectableItemBackground"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_overflow"
-            android:scaleType="centerInside" />
+            android:scaleType="centerInside"
+            android:contentDescription="@string/btn_overflow" />
 
     </LinearLayout>
 
@@ -101,15 +109,90 @@
         android:id="@+id/progress_bar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="2dp"
+        android:layout_height="3dp"
         android:progressTint="@color/accent"
         android:visibility="gone" />
 
-    <!-- WebView -->
-    <WebView
-        android:id="@+id/webview"
+    <!-- Find-in-page bar -->
+    <LinearLayout
+        android:id="@+id/find_bar"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:background="@color/bg_surface_2"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_find"
+            android:contentDescription="@string/menu_find" />
+
+        <EditText
+            android:id="@+id/find_input"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:hint="@string/find_hint"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_hint"
+            android:textSize="14sp"
+            android:background="@android:color/transparent"
+            android:singleLine="true"
+            android:imeOptions="actionSearch" />
+
+        <TextView
+            android:id="@+id/find_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:paddingEnd="6dp"
+            android:paddingStart="6dp"
+            android:text="" />
+
+        <ImageButton
+            android:id="@+id/find_prev"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_up"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/find_prev" />
+
+        <ImageButton
+            android:id="@+id/find_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_down"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/find_next" />
+
+        <ImageButton
+            android:id="@+id/find_close"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_close"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/find_close" />
+
+    </LinearLayout>
+
+    <!-- WebView wrapped in pull-to-refresh -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <WebView
+            android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 </LinearLayout>

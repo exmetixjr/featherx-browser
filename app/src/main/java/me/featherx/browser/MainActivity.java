@@ -1,15 +1,19 @@
 package me.featherx.browser;
 
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -18,6 +22,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.CookieManager;
+import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -26,6 +31,8 @@ import android.widget.*;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.tabs.TabLayout;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -53,13 +60,21 @@ public class MainActivity extends AppCompatActivity {
         "https://duckduckgo.com/?q=",
         "https://search.yahoo.com/search?p="
     };
+    private static final String[] SEARCH_NAMES = {"Google", "Bing", "DuckDuckGo", "Yahoo"};
     private static final int[] SEARCH_ICONS = {
         R.drawable.ic_search_engine, // Google
-        R.drawable.ic_bing,        // Bing  
+        R.drawable.ic_bing,        // Bing
         R.drawable.ic_dg,           // DuckDuckGo
         R.drawable.ic_yahoo          // Yahoo
     };
     private static final String HOME = "https://www.google.com";
+
+    private BookmarkManager bookmarkManager;
+    private HistoryManager historyManager;
+    private SwipeRefreshLayout swipeRefresh;
+    private LinearLayout findBar;
+    private EditText findInput;
+    private TextView findCount;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -72,6 +87,22 @@ public class MainActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progress_bar);
         tabCount = findViewById(R.id.tab_count);
         searchEngineBtn = findViewById(R.id.btn_search_engine);
+        swipeRefresh = findViewById(R.id.swipe_refresh);
+        findBar = findViewById(R.id.find_bar);
+        findInput = findViewById(R.id.find_input);
+        findCount = findViewById(R.id.find_count);
+
+        bookmarkManager = new BookmarkManager(this);
+        historyManager = new HistoryManager(this);
+
+        swipeRefresh.setColorSchemeResources(R.color.accent, R.color.accent_2);
+        swipeRefresh.setProgressBackgroundColorSchemeResource(R.color.bg_surface);
+        swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override public void onRefresh() { webView.reload(); }
+        });
+
+        setupFindBar();
+        setupDownloads(webView);
 
         tabManager = new TabManager(this);
         tabManager.setListener(new TabManager.TabManagerListener() {
@@ -98,6 +129,10 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        if (findBar != null && findBar.getVisibility() == View.VISIBLE) {
+            hideFindBar();
+            return;
+        }
         if (webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
     }
@@ -137,11 +172,16 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView v, String url) {
                 progressBar.setVisibility(View.GONE);
                 urlBar.setText(url);
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                 CookieManager.getInstance().flush();
                 TabManager.Tab tab = tabManager.getCurrentTab();
                 if (tab != null) {
                     tab.url = url;
                     tab.title = v.getTitle();
+                }
+                // Record history (skip incognito)
+                if (!incognitoMode && historyManager != null) {
+                    historyManager.add(v.getTitle(), url);
                 }
                 // Re-inject DevTools if it was active
                 if (devToolsActive) {
@@ -352,12 +392,17 @@ public class MainActivity extends AppCompatActivity {
     private void showOverflowMenu(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenuInflater().inflate(R.menu.overflow_menu, popup.getMenu());
-        
-        // Update menu item states
+
         MenuItem backItem = popup.getMenu().findItem(R.id.menu_back);
         MenuItem forwardItem = popup.getMenu().findItem(R.id.menu_forward);
         backItem.setEnabled(webView.canGoBack());
         forwardItem.setEnabled(webView.canGoForward());
+
+        // Toggle bookmark item label based on whether the current URL is bookmarked
+        MenuItem bookmarkItem = popup.getMenu().findItem(R.id.menu_bookmark);
+        String currentUrl = webView.getUrl();
+        boolean isBookmarked = bookmarkManager.exists(currentUrl);
+        bookmarkItem.setTitle(isBookmarked ? "Remove bookmark" : "Add bookmark");
 
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
@@ -365,42 +410,230 @@ public class MainActivity extends AppCompatActivity {
                 int id = item.getItemId();
                 if (id == R.id.menu_back) {
                     if (webView.canGoBack()) webView.goBack();
-                    return true;
                 } else if (id == R.id.menu_forward) {
                     if (webView.canGoForward()) webView.goForward();
-                    return true;
                 } else if (id == R.id.menu_bookmark) {
-                    Toast.makeText(MainActivity.this, "Bookmark feature coming soon", Toast.LENGTH_SHORT).show();
-                    return true;
+                    toggleBookmark();
+                } else if (id == R.id.menu_bookmarks) {
+                    showBookmarks();
+                } else if (id == R.id.menu_history) {
+                    showHistory();
+                } else if (id == R.id.menu_find) {
+                    showFindBar();
                 } else if (id == R.id.menu_share) {
                     shareCurrentUrl();
-                    return true;
                 } else if (id == R.id.menu_reload) {
                     webView.reload();
-                    return true;
+                } else if (id == R.id.menu_save_page) {
+                    savePage();
+                } else if (id == R.id.menu_clear_data) {
+                    showClearDataDialog();
                 } else if (id == R.id.menu_devtools) {
                     toggleDevTools();
-                    return true;
                 } else if (id == R.id.menu_js_inject) {
                     openJSInject();
-                    return true;
                 } else if (id == R.id.menu_cookies) {
                     openCookies();
-                    return true;
                 } else if (id == R.id.menu_desktop_mode) {
                     toggleDesktopMode();
-                    return true;
                 } else if (id == R.id.menu_ua) {
                     openUA();
-                    return true;
                 } else if (id == R.id.menu_site_settings) {
                     openSiteSettings();
-                    return true;
+                } else {
+                    return false;
                 }
-                return false;
+                return true;
             }
         });
         popup.show();
+    }
+
+    // ---------- Bookmarks ----------
+    private void toggleBookmark() {
+        String url = webView.getUrl();
+        if (url == null || url.isEmpty()) return;
+        if (bookmarkManager.exists(url)) {
+            bookmarkManager.remove(url);
+            Toast.makeText(this, "Bookmark removed", Toast.LENGTH_SHORT).show();
+        } else {
+            String title = webView.getTitle();
+            bookmarkManager.add(title, url);
+            Toast.makeText(this, "Bookmark added", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showBookmarks() {
+        final List<BookmarkManager.Bookmark> items = bookmarkManager.getAll();
+        if (items.isEmpty()) {
+            Toast.makeText(this, "No bookmarks yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = new String[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            BookmarkManager.Bookmark b = items.get(i);
+            labels[i] = (b.title == null || b.title.isEmpty() ? b.url : b.title) + "\n" + b.url;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Bookmarks (" + items.size() + ")")
+            .setItems(labels, new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) {
+                    webView.loadUrl(items.get(which).url);
+                }
+            })
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Clear all", new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) {
+                    bookmarkManager.clear();
+                    Toast.makeText(MainActivity.this, "All bookmarks cleared", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .show();
+    }
+
+    // ---------- History ----------
+    private void showHistory() {
+        final List<HistoryManager.Entry> items = historyManager.getAll();
+        if (items.isEmpty()) {
+            Toast.makeText(this, "No history yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = new String[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            HistoryManager.Entry e = items.get(i);
+            labels[i] = (e.title == null || e.title.isEmpty() ? e.url : e.title) + "\n" + e.url;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("History (" + items.size() + ")")
+            .setItems(labels, new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) {
+                    webView.loadUrl(items.get(which).url);
+                }
+            })
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Clear all", new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) {
+                    historyManager.clear();
+                    Toast.makeText(MainActivity.this, "History cleared", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .show();
+    }
+
+    // ---------- Find in page ----------
+    private void setupFindBar() {
+        findInput.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                String q = s.toString();
+                if (q.isEmpty()) {
+                    webView.clearMatches();
+                    findCount.setText("");
+                } else {
+                    webView.findAllAsync(q);
+                }
+            }
+        });
+        webView.setFindListener(new WebView.FindListener() {
+            @Override public void onFindResultReceived(int active, int total, boolean isDoneCounting) {
+                if (isDoneCounting) {
+                    findCount.setText(total == 0 ? "0/0" : (active + 1) + "/" + total);
+                }
+            }
+        });
+        findViewById(R.id.find_prev).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { webView.findNext(false); }
+        });
+        findViewById(R.id.find_next).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { webView.findNext(true); }
+        });
+        findViewById(R.id.find_close).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { hideFindBar(); }
+        });
+    }
+
+    private void showFindBar() {
+        findBar.setVisibility(View.VISIBLE);
+        findInput.requestFocus();
+        android.view.inputmethod.InputMethodManager imm =
+            (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        imm.showSoftInput(findInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    private void hideFindBar() {
+        findBar.setVisibility(View.GONE);
+        findInput.setText("");
+        webView.clearMatches();
+        android.view.inputmethod.InputMethodManager imm =
+            (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(findInput.getWindowToken(), 0);
+    }
+
+    // ---------- Downloads ----------
+    private void setupDownloads(WebView wv) {
+        wv.setDownloadListener(new android.webkit.DownloadListener() {
+            @Override public void onDownloadStart(String url, String userAgent, String contentDisposition,
+                                                 String mimetype, long contentLength) {
+                try {
+                    String fileName = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                    DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+                    req.setMimeType(mimetype);
+                    req.addRequestHeader("User-Agent", userAgent);
+                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+                    req.allowScanningByMediaScanner();
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    dm.enqueue(req);
+                    Toast.makeText(MainActivity.this, "Downloading: " + fileName, Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    // ---------- Save page ----------
+    private void savePage() {
+        try {
+            String url = webView.getUrl();
+            String fileName = (webView.getTitle() != null ? webView.getTitle().replaceAll("[^a-zA-Z0-9-_.]", "_") : "page");
+            if (fileName.length() > 60) fileName = fileName.substring(0, 60);
+            java.io.File dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+            if (dir == null) dir = getFilesDir();
+            java.io.File out = new java.io.File(dir, fileName + ".mht");
+            webView.saveWebArchive(out.getAbsolutePath());
+            Toast.makeText(this, "Saved: " + out.getAbsolutePath(), Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Save failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // ---------- Clear browsing data ----------
+    private void showClearDataDialog() {
+        final boolean[] checks = {true, true, true, false};
+        final String[] labels = {"Cache", "Cookies", "History", "Bookmarks"};
+        new AlertDialog.Builder(this)
+            .setTitle("Clear browsing data")
+            .setMultiChoiceItems(labels, checks, new DialogInterface.OnMultiChoiceClickListener() {
+                @Override public void onClick(DialogInterface d, int which, boolean isChecked) {
+                    checks[which] = isChecked;
+                }
+            })
+            .setPositiveButton("Clear", new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) {
+                    if (checks[0]) { webView.clearCache(true); }
+                    if (checks[1]) {
+                        CookieManager.getInstance().removeAllCookies(null);
+                        CookieManager.getInstance().flush();
+                    }
+                    if (checks[2]) { historyManager.clear(); webView.clearHistory(); }
+                    if (checks[3]) { bookmarkManager.clear(); }
+                    Toast.makeText(MainActivity.this, "Cleared", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 
     private void shareCurrentUrl() {
