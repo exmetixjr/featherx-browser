@@ -6,7 +6,7 @@
     android:orientation="vertical"
     android:background="@color/bg_dark">
 
-    <!-- Top bar: Search + actions -->
+    <!-- Top bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="48dp"
@@ -16,6 +16,24 @@
         android:paddingEnd="4dp"
         android:gravity="center_vertical">
 
+        <!-- Home icon -->
+        <ImageButton
+            android:id="@+id/btn_home"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackground"
+            android:src="@drawable/ic_home"
+            android:scaleType="centerInside" />
+
+        <!-- Search engine icon -->
+        <ImageButton
+            android:id="@+id/btn_search_engine"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackground"
+            android:scaleType="centerInside" />
+
+        <!-- URL/Search bar -->
         <EditText
             android:id="@+id/url_bar"
             android:layout_width="0dp"
@@ -33,18 +51,48 @@
             android:inputType="textUri"
             android:selectAllOnFocus="true" />
 
-        <Button
-            android:id="@+id/btn_reload_top"
-            style="@style/ToolBtn"
-            android:layout_width="48dp"
-            android:text="R" />
+        <!-- New tab -->
+        <ImageButton
+            android:id="@+id/btn_new_tab"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackground"
+            android:src="@drawable/ic_plus"
+            android:scaleType="centerInside" />
 
-        <Button
-            android:id="@+id/btn_tabs_top"
-            style="@style/ToolBtn"
-            android:layout_width="48dp"
-            android:textColor="@color/accent"
-            android:text="T" />
+        <!-- Tab count -->
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageButton
+                android:id="@+id/btn_tabs"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackground"
+                android:src="@drawable/ic_tabs"
+                android:scaleType="centerInside" />
+
+            <TextView
+                android:id="@+id/tab_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:background="@color/accent"
+                android:textColor="@color/text_primary"
+                android:textSize="10sp"
+                android:paddingHorizontal="4dp"
+                android:gravity="center" />
+        </FrameLayout>
+
+        <!-- 3-dot menu -->
+        <ImageButton
+            android:id="@+id/btn_overflow"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackground"
+            android:src="@drawable/ic_overflow"
+            android:scaleType="centerInside" />
 
     </LinearLayout>
 
@@ -57,38 +105,11 @@
         android:progressTint="@color/accent"
         android:visibility="gone" />
 
-    <!-- WebView Container -->
-    <FrameLayout
+    <!-- WebView -->
+    <WebView
+        android:id="@+id/webview"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <WebView
-            android:id="@+id/webview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-    </FrameLayout>
-
-    <!-- Bottom nav bar (home + tools only) -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:orientation="horizontal"
-        android:background="@color/bg_surface"
-        android:elevation="4dp">
-
-        <Button
-            android:id="@+id/btn_home"
-            style="@style/ToolBtn"
-            android:text="H" />
-
-        <Button
-            android:id="@+id/btn_tools"
-            style="@style/ToolBtn"
-            android:textColor="@color/accent"
-            android:text="S" />
-
-    </LinearLayout>
+        android:layout_weight="1" />
 
 </LinearLayout>

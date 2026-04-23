@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_back"
+        android:title="Back"
+        android:icon="@drawable/ic_back"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_forward"
+        android:title="Forward"
+        android:icon="@drawable/ic_forward"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_bookmark"
+        android:title="Bookmark"
+        android:icon="@drawable/ic_bookmark"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_share"
+        android:title="Share"
+        android:icon="@drawable/ic_share"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_reload"
+        android:title="Reload"
+        android:icon="@drawable/ic_reload"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_devtools"
+        android:title="DevTools"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_js_inject"
+        android:title="JS Inject"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_cookies"
+        android:title="Cookies"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_desktop_mode"
+        android:title="Desktop Mode"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_ua"
+        android:title="User Agent"
+        android:showAsAction="never" />
+    <item
+        android:id="@+id/menu_site_settings"
+        android:title="Site Settings"
+        android:showAsAction="never" />
+</menu>
