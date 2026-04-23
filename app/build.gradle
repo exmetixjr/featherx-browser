@@ -16,7 +16,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('../release-key.keystore')
+            storeFile file('release-key.keystore')
             storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'android'
             keyAlias 'featherx'
             keyPassword System.getenv('KEY_PASSWORD') ?: 'android'
@@ -29,8 +29,7 @@ android {
         }
         release {
             minifyEnabled false
-            // Disable signing for now - will fix later
-            // signingConfig signingConfigs.release
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
