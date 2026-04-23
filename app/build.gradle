@@ -16,7 +16,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('release-key.keystore')
+            storeFile file('app/release-key.keystore')
             storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'android'
             keyAlias 'featherx'
             keyPassword System.getenv('KEY_PASSWORD') ?: 'android'
@@ -25,14 +25,8 @@ android {
 
     buildTypes {
         debug {
-            // No applicationIdSuffix - causes issues
+            // No applicationIdSuffix
         }
-        release {
-            minifyEnabled false;
-            signingConfig signingConfigs.release;
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
         release {
             minifyEnabled false
             signingConfig signingConfigs.release
@@ -41,8 +35,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 }
 
