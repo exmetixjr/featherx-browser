@@ -16,7 +16,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('app/release-key.keystore')
+            storeFile file('release-key.keystore')
             storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'android'
             keyAlias 'featherx'
             keyPassword System.getenv('KEY_PASSWORD') ?: 'android'
