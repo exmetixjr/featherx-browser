@@ -80,6 +80,69 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        try {
+            doOnCreate(savedInstanceState);
+        } catch (Throwable t) {
+            showCrashScreen(t);
+        }
+    }
+
+    private void showCrashScreen(Throwable t) {
+        try {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            t.printStackTrace(new java.io.PrintWriter(sw));
+            final String trace = "FeatherX startup crash:\n\n"
+                + t.getClass().getName() + ": " + t.getMessage() + "\n\n"
+                + "Android " + android.os.Build.VERSION.RELEASE
+                + " (SDK " + android.os.Build.VERSION.SDK_INT + ")\n"
+                + "Device: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + "\n\n"
+                + sw.toString();
+
+            android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+            scroll.setBackgroundColor(0xFF101010);
+            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+            col.setOrientation(android.widget.LinearLayout.VERTICAL);
+            int pad = (int) (16 * getResources().getDisplayMetrics().density);
+            col.setPadding(pad, pad, pad, pad);
+
+            TextView title = new TextView(this);
+            title.setText("FeatherX crashed on launch");
+            title.setTextColor(0xFFFF6B6B);
+            title.setTextSize(18f);
+            col.addView(title);
+
+            TextView body = new TextView(this);
+            body.setText(trace);
+            body.setTextColor(0xFFE0E0E0);
+            body.setTextSize(11f);
+            body.setTypeface(android.graphics.Typeface.MONOSPACE);
+            body.setTextIsSelectable(true);
+            int top = (int) (12 * getResources().getDisplayMetrics().density);
+            body.setPadding(0, top, 0, top);
+            col.addView(body);
+
+            android.widget.Button copyBtn = new android.widget.Button(this);
+            copyBtn.setText("Copy crash details");
+            copyBtn.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(ClipData.newPlainText("FeatherX crash", trace));
+                    Toast.makeText(MainActivity.this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
+                }
+            });
+            col.addView(copyBtn);
+
+            scroll.addView(col);
+            setContentView(scroll);
+        } catch (Throwable inner) {
+            // Last-resort: at least toast something
+            Toast.makeText(this, "Crash: " + t.getClass().getSimpleName() + " " + t.getMessage(),
+                Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    private void doOnCreate(Bundle savedInstanceState) {
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.webview);
