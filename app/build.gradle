@@ -18,9 +18,9 @@ android {
     signingConfigs {
         release {
             storeFile file('release-key.keystore')
-            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'android'
-            keyAlias 'featherx'
-            keyPassword System.getenv('KEY_PASSWORD') ?: 'android'
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias System.getenv('KEY_ALIAS')
+            keyPassword System.getenv('KEY_PASSWORD')
         }
     }
 
@@ -46,4 +46,20 @@ dependencies {
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.core:core:1.13.1'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def runningRelease = graph.allTasks.any { task ->
+        task.project == project && task.name.toLowerCase().contains('release')
+    }
+    if (runningRelease) {
+        ['KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'].each { name ->
+            if (!System.getenv(name)) {
+                throw new GradleException(
+                    "Missing required signing env var '${name}'. " +
+                    "Set KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD (and provide app/release-key.keystore) before running a release build."
+                )
+            }
+        }
+    }
 }
