@@ -1,6 +1,7 @@
 package me.featherx.browser;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -9,10 +10,12 @@ import java.util.List;
 
 public class TabManager {
     public static class Tab {
-        WebView webView;
-        String url;
-        String title;
-        boolean isIncognito;
+        public WebView webView;
+        public String url;
+        public String title;
+        public boolean isIncognito;
+        public Bitmap favicon;
+        public Bitmap thumbnail;
 
         Tab(WebView wv, String u, String t, boolean incognito) {
             webView = wv;
@@ -22,9 +25,9 @@ public class TabManager {
         }
     }
 
-    private List<Tab> tabs = new ArrayList<>();
+    private final List<Tab> tabs = new ArrayList<>();
     private int currentTabIndex = -1;
-    private Context context;
+    private final Context context;
     private TabManagerListener listener;
 
     public interface TabManagerListener {
@@ -52,6 +55,7 @@ public class TabManager {
     }
 
     public void closeTab(int index) {
+        if (index < 0 || index >= tabs.size()) return;
         if (tabs.size() <= 1) return;
         Tab tab = tabs.get(index);
         if (tab.webView != null) {
@@ -60,8 +64,21 @@ public class TabManager {
         tabs.remove(index);
         if (currentTabIndex >= tabs.size()) {
             currentTabIndex = tabs.size() - 1;
+        } else if (currentTabIndex > index) {
+            currentTabIndex--;
         }
         switchToTab(currentTabIndex);
+    }
+
+    public void closeAll(boolean keepOne) {
+        for (Tab t : tabs) {
+            if (t.webView != null) t.webView.destroy();
+        }
+        tabs.clear();
+        currentTabIndex = -1;
+        if (keepOne) {
+            // caller should create a new fresh tab afterwards
+        }
     }
 
     public void switchToTab(int index) {
@@ -105,6 +122,8 @@ public class TabManager {
         s.setLoadWithOverviewMode(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setMediaPlaybackRequiresUserGesture(false);
+        s.setSupportMultipleWindows(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
 
         if (tab.isIncognito) {
             s.setCacheMode(WebSettings.LOAD_NO_CACHE);
