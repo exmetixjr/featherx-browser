@@ -49,8 +49,12 @@ public class MainActivity extends AppCompatActivity {
     private EditText urlBar;
     private ProgressBar progressBar;
     private TextView tabCount;
-    private ImageButton searchEngineBtn;
     private FrameLayout overlayContainer;
+    private LinearLayout tabStrip;
+    private HorizontalScrollView tabStripScroll;
+    private ImageView urlLock;
+    private ImageButton btnBookmark;
+    private ImageButton btnBack, btnForward;
     private boolean devToolsActive = false;
     private boolean desktopMode = false;
     private boolean incognitoMode = false;
@@ -149,12 +153,17 @@ public class MainActivity extends AppCompatActivity {
         urlBar = findViewById(R.id.url_bar);
         progressBar = findViewById(R.id.progress_bar);
         tabCount = findViewById(R.id.tab_count);
-        searchEngineBtn = findViewById(R.id.btn_search_engine);
         swipeRefresh = findViewById(R.id.swipe_refresh);
         findBar = findViewById(R.id.find_bar);
         findInput = findViewById(R.id.find_input);
         findCount = findViewById(R.id.find_count);
         overlayContainer = findViewById(R.id.overlay_container);
+        tabStrip = findViewById(R.id.tab_strip);
+        tabStripScroll = findViewById(R.id.tab_strip_scroll);
+        urlLock = findViewById(R.id.url_lock);
+        btnBookmark = findViewById(R.id.btn_bookmark);
+        btnBack = findViewById(R.id.btn_back);
+        btnForward = findViewById(R.id.btn_forward);
 
         bookmarkManager = new BookmarkManager(this);
         historyManager = new HistoryManager(this);
@@ -175,6 +184,9 @@ public class MainActivity extends AppCompatActivity {
             parent.addView(webView, index);
             urlBar.setText(tab.url == null ? "" : tab.url);
             updateTabCount();
+            renderTabStrip();
+            updateUrlChrome();
+            updateNavButtons();
         });
 
         // Register the initial webview as the first tab so TabManager knows about it.
@@ -184,8 +196,8 @@ public class MainActivity extends AppCompatActivity {
         setupWebViewForCurrent(webView);
         setupUrlBar();
         setupNavButtons();
-        updateSearchEngineIcon();
         updateTabCount();
+        renderTabStrip();
         webView.loadUrl(HOME);
     }
 
@@ -263,6 +275,8 @@ public class MainActivity extends AppCompatActivity {
                     progressBar.setVisibility(View.VISIBLE);
                     progressBar.setProgress(0);
                     armProgressGuard();
+                    updateUrlChrome();
+                    updateNavButtons();
                 }
             }
             @Override
@@ -272,6 +286,8 @@ public class MainActivity extends AppCompatActivity {
                     progressGuard.removeCallbacksAndMessages(null);
                     urlBar.setText(url);
                     if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                    updateUrlChrome();
+                    updateNavButtons();
                 }
                 CookieManager.getInstance().flush();
                 TabManager.Tab tab = findTabFor(v);
@@ -285,6 +301,7 @@ public class MainActivity extends AppCompatActivity {
                 if (v == webView && devToolsActive) {
                     injectDevTools(null);
                 }
+                renderTabStrip();
             }
         });
 
@@ -306,11 +323,13 @@ public class MainActivity extends AppCompatActivity {
             public void onReceivedTitle(WebView v, String title) {
                 TabManager.Tab tab = findTabFor(v);
                 if (tab != null) tab.title = title;
+                renderTabStrip();
             }
             @Override
             public void onReceivedIcon(WebView v, Bitmap icon) {
                 TabManager.Tab tab = findTabFor(v);
                 if (tab != null) tab.favicon = icon;
+                renderTabStrip();
             }
             @Override
             public boolean onCreateWindow(WebView v, boolean isDialog, boolean isUserGesture, Message resultMsg) {
@@ -331,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 transport.setWebView(newView);
                 resultMsg.sendToTarget();
+                renderTabStrip();
                 return true;
             }
         });
@@ -379,15 +399,43 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupNavButtons() {
+        btnBack.setOnClickListener(v -> { if (webView.canGoBack()) webView.goBack(); });
+        btnForward.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); });
+        findViewById(R.id.btn_reload).setOnClickListener(v -> {
+            if (progressBar.getVisibility() == View.VISIBLE) webView.stopLoading();
+            else webView.reload();
+        });
         findViewById(R.id.btn_home).setOnClickListener(v -> webView.loadUrl(HOME));
-        searchEngineBtn.setOnClickListener(v -> showSearchEngineDialog());
-        findViewById(R.id.btn_new_tab).setOnClickListener(v -> createNewTab(incognitoMode));
+        btnBookmark.setOnClickListener(v -> { toggleBookmark(); updateUrlChrome(); });
+        urlLock.setOnClickListener(v -> showSiteSettingsOverlay());
+        findViewById(R.id.btn_new_tab_strip).setOnClickListener(v -> createNewTab(incognitoMode));
         findViewById(R.id.btn_tabs).setOnClickListener(v -> showTabsOverlay());
         findViewById(R.id.btn_overflow).setOnClickListener(this::showOverflowSheet);
+        updateNavButtons();
+        updateUrlChrome();
     }
 
-    private void updateSearchEngineIcon() {
-        searchEngineBtn.setImageResource(SEARCH_ICONS[currentSearchEngine]);
+    private void updateNavButtons() {
+        if (btnBack == null || webView == null) return;
+        boolean back = webView.canGoBack();
+        boolean fwd = webView.canGoForward();
+        btnBack.setEnabled(back);
+        btnBack.setAlpha(back ? 1f : 0.35f);
+        btnForward.setEnabled(fwd);
+        btnForward.setAlpha(fwd ? 1f : 0.35f);
+    }
+
+    private void updateUrlChrome() {
+        if (urlLock == null || btnBookmark == null || webView == null) return;
+        String url = webView.getUrl();
+        if (url != null && url.startsWith("https://")) {
+            urlLock.setImageResource(R.drawable.ic_lock);
+        } else {
+            urlLock.setImageResource(R.drawable.ic_globe_small);
+        }
+        boolean isBookmarked = url != null && bookmarkManager != null && bookmarkManager.exists(url);
+        btnBookmark.setImageResource(isBookmarked
+            ? R.drawable.ic_bookmark_filled : R.drawable.ic_bookmark);
     }
 
     private void updateTabCount() {
@@ -395,12 +443,68 @@ public class MainActivity extends AppCompatActivity {
         tabCount.setText(String.valueOf(count));
     }
 
+    // ---------- Tab strip (desktop-style) ----------
+    private void renderTabStrip() {
+        if (tabStrip == null || tabManager == null) return;
+        tabStrip.removeAllViews();
+        List<TabManager.Tab> all = tabManager.getAllTabs();
+        TabManager.Tab current = tabManager.getCurrentTab();
+        View activeView = null;
+        for (int i = 0; i < all.size(); i++) {
+            final int idx = i;
+            final TabManager.Tab tab = all.get(i);
+            View item = LayoutInflater.from(this)
+                .inflate(R.layout.item_tab_strip, tabStrip, false);
+            ImageView fav = item.findViewById(R.id.strip_favicon);
+            TextView title = item.findViewById(R.id.strip_title);
+            ImageButton close = item.findViewById(R.id.strip_close);
+
+            String t = (tab.title == null || tab.title.isEmpty()) ? "New Tab" : tab.title;
+            if (tab.isIncognito) t = "🕶 " + t;
+            title.setText(t);
+            if (tab.favicon != null) fav.setImageBitmap(tab.favicon);
+            else fav.setImageResource(tab.isIncognito ? R.drawable.ic_incognito : R.drawable.ic_globe);
+
+            boolean isActive = tab == current;
+            if (isActive) {
+                item.setBackgroundResource(R.drawable.bg_tab_pill_active);
+                title.setTextColor(0xFFF2F1F8);
+                activeView = item;
+            } else {
+                item.setBackgroundResource(R.drawable.bg_tab_pill);
+                title.setTextColor(0xFFB8B6C8);
+            }
+            item.setOnClickListener(v -> tabManager.switchToTab(idx));
+            close.setOnClickListener(v -> {
+                if (tabManager.getTabCount() <= 1) {
+                    Toast.makeText(MainActivity.this, "Can't close the last tab",
+                        Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                tabManager.closeTab(idx);
+                updateTabCount();
+                renderTabStrip();
+            });
+            tabStrip.addView(item);
+        }
+        // Auto-scroll active tab into view
+        if (activeView != null && tabStripScroll != null) {
+            final View target = activeView;
+            tabStripScroll.post(() -> {
+                int x = target.getLeft();
+                int w = target.getWidth();
+                int sw = tabStripScroll.getWidth();
+                int scrollX = Math.max(0, x - (sw - w) / 2);
+                tabStripScroll.smoothScrollTo(scrollX, 0);
+            });
+        }
+    }
+
     private void showSearchEngineDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Search engine");
         builder.setItems(SEARCH_NAMES, (dialog, which) -> {
             currentSearchEngine = which;
-            updateSearchEngineIcon();
             Toast.makeText(MainActivity.this, "Search: " + SEARCH_NAMES[which], Toast.LENGTH_SHORT).show();
         });
         builder.show();
@@ -420,6 +524,9 @@ public class MainActivity extends AppCompatActivity {
         parent.addView(webView, idx);
         webView.loadUrl(HOME);
         updateTabCount();
+        renderTabStrip();
+        updateUrlChrome();
+        updateNavButtons();
     }
 
     // ---------- Tabs overlay ----------
@@ -1088,7 +1195,7 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < SEARCH_ENGINES.length; i++) {
             final int idx = i;
             Button b = btn(SEARCH_NAMES[i] + (i == currentSearchEngine ? " ✓" : ""),
-                v -> { currentSearchEngine = idx; updateSearchEngineIcon(); });
+                v -> { currentSearchEngine = idx; });
             if (i == currentSearchEngine) b.setBackgroundColor(0xFF3D3665);
             l.addView(b);
         }

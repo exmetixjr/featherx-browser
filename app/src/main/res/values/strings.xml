@@ -31,4 +31,10 @@
     <string name="menu_new_tab">New tab</string>
     <string name="menu_close_tab">Close tab</string>
     <string name="menu_incognito">Incognito mode</string>
+    <string name="btn_close_tab">Close tab</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_forward">Forward</string>
+    <string name="btn_reload">Reload</string>
+    <string name="btn_bookmark">Bookmark</string>
+    <string name="btn_site_info">Site info</string>
 </resources>
