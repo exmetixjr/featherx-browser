@@ -28,6 +28,8 @@ Native Android browser app (APK). Lightweight WebView-based browser with multipl
 ## CI
 `.github/workflows/build.yml` builds the release APK on push to `main` using JDK 17 (Temurin) and uploads it as a workflow artifact.
 
+The latest signed release APK fetched from CI lives at `artifacts/app-release.apk` (built from commit d1afe47, run #25, conclusion success).
+
 ## Notes
 - Not a web app: nothing to preview in the Replit browser.
 - Release builds need a keystore at `app/release-key.keystore` (the CI workflow generates a throwaway one).
