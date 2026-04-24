@@ -17,24 +17,39 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Decode release keystore
+      - name: Prepare release keystore
+        id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "ERROR: KEYSTORE_BASE64 secret is not set. Generate a keystore once locally and store it (along with KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD) as GitHub Actions secrets." >&2
-            exit 1
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "Using stable keystore from secrets."
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release-key.keystore
+            echo "store_password=$KEYSTORE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "key_alias=$KEY_ALIAS"            >> "$GITHUB_OUTPUT"
+            echo "key_password=$KEY_PASSWORD"      >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No keystore secrets set; generating an ephemeral one. Each build will have a different signing certificate, so users must uninstall before reinstalling. Set KEYSTORE_BASE64/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD secrets to enable in-place updates."
+            keytool -genkey -v -keystore app/release-key.keystore \
+              -storepass android -keypass android \
+              -alias featherx -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=FeatherX, OU=Dev, O=FeatherX, L=NA, S=NA, C=US"
+            echo "store_password=android"  >> "$GITHUB_OUTPUT"
+            echo "key_alias=featherx"      >> "$GITHUB_OUTPUT"
+            echo "key_password=android"    >> "$GITHUB_OUTPUT"
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > app/release-key.keystore
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
       - name: Build Release APK
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ steps.keystore.outputs.store_password }}
+          KEY_ALIAS: ${{ steps.keystore.outputs.key_alias }}
+          KEY_PASSWORD: ${{ steps.keystore.outputs.key_password }}
         run: ./gradlew assembleRelease --stacktrace --no-daemon 2>&1
 
       - name: Upload APK
