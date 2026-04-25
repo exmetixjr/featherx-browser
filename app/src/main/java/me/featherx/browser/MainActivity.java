@@ -177,11 +177,7 @@ public class MainActivity extends AppCompatActivity {
 
         tabManager = new TabManager(this);
         tabManager.setListener((tab, newWebView) -> {
-            ViewGroup parent = (ViewGroup) webView.getParent();
-            int index = parent.indexOfChild(webView);
-            parent.removeView(webView);
-            webView = newWebView;
-            parent.addView(webView, index);
+            swapVisibleWebView(newWebView);
             urlBar.setText(tab.url == null ? "" : tab.url);
             updateTabCount();
             renderTabStrip();
@@ -339,18 +335,16 @@ public class MainActivity extends AppCompatActivity {
                 setupBackgroundWebView(newView, incognito);
                 tabManager.initWebViewForTab(newTab, newView);
 
-                // Swap visible WebView to the new tab
-                ViewGroup parent = (ViewGroup) webView.getParent();
-                int idx = parent.indexOfChild(webView);
-                parent.removeView(webView);
-                webView = newView;
-                parent.addView(webView, idx);
+                // Swap visible WebView to the new tab (with proper layout params)
+                swapVisibleWebView(newView);
                 updateTabCount();
 
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 transport.setWebView(newView);
                 resultMsg.sendToTarget();
                 renderTabStrip();
+                updateUrlChrome();
+                updateNavButtons();
                 return true;
             }
         });
@@ -516,17 +510,44 @@ public class MainActivity extends AppCompatActivity {
         setupBackgroundWebView(newWebView, incognito);
         tabManager.initWebViewForTab(newTab, newWebView);
 
-        // Swap to the new tab
-        ViewGroup parent = (ViewGroup) webView.getParent();
-        int idx = parent.indexOfChild(webView);
-        parent.removeView(webView);
-        webView = newWebView;
-        parent.addView(webView, idx);
+        // Swap to the new tab (helper sets correct MATCH_PARENT layout params)
+        swapVisibleWebView(newWebView);
         webView.loadUrl(HOME);
         updateTabCount();
         renderTabStrip();
         updateUrlChrome();
         updateNavButtons();
+    }
+
+    /**
+     * Swap the currently-visible WebView for {@code newView}, preserving its
+     * position in the parent and re-applying MATCH_PARENT layout params so
+     * the new view actually fills the SwipeRefreshLayout. Without explicit
+     * params the framework would create a wrap_content (0×0) view and the
+     * new tab would appear "blank", which is the bug behind "only one tab
+     * works at a time".
+     */
+    private void swapVisibleWebView(WebView newView) {
+        if (webView == newView) return;
+        ViewGroup parent = (ViewGroup) webView.getParent();
+        if (parent == null) return;
+        int idx = parent.indexOfChild(webView);
+        ViewGroup.LayoutParams oldLp = webView.getLayoutParams();
+        parent.removeView(webView);
+        ViewGroup.LayoutParams lp;
+        if (oldLp != null) {
+            lp = oldLp;
+        } else {
+            lp = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+        // Detach newView from any previous parent so addView won't throw.
+        ViewGroup prevParent = (ViewGroup) newView.getParent();
+        if (prevParent != null) prevParent.removeView(newView);
+        webView = newView;
+        parent.addView(webView, idx, lp);
+        webView.requestLayout();
     }
 
     // ---------- Tabs overlay ----------
@@ -689,6 +710,74 @@ public class MainActivity extends AppCompatActivity {
         overlayContainer.setVisibility(View.GONE);
     }
 
+    /**
+     * Show a single tool (Cookies, JS Inject, UA, …) in the full-screen
+     * overlay container with a dedicated header. Replaces the old shared
+     * "tools sheet" that lumped every tool behind tabs.
+     */
+    private void showSingleToolOverlay(String title, View content) {
+        if (overlayContainer == null) return;
+        overlayContainer.removeAllViews();
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(0xFF1A1430);
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // Header bar
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16), dp(12), dp(8), dp(12));
+        header.setBackgroundColor(0xFF211A3B);
+
+        TextView titleTv = new TextView(this);
+        titleTv.setText(title);
+        titleTv.setTextColor(0xFFF2F1F8);
+        titleTv.setTextSize(18);
+        titleTv.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        titleTv.setLayoutParams(tlp);
+        header.addView(titleTv);
+
+        ImageButton close = new ImageButton(this);
+        close.setImageResource(R.drawable.ic_close);
+        close.setBackgroundResource(R.drawable.bg_toolbar_btn);
+        close.setColorFilter(0xFFF2F1F8);
+        close.setOnClickListener(v -> hideOverlay());
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        close.setLayoutParams(clp);
+        header.addView(close);
+
+        root.addView(header);
+
+        // Scrollable body
+        ScrollView sv = new ScrollView(this);
+        LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        sv.setLayoutParams(svLp);
+        sv.setFillViewport(true);
+        sv.setPadding(dp(8), dp(8), dp(8), dp(16));
+
+        // If content is already attached to a parent, detach first.
+        ViewGroup contentParent = (ViewGroup) content.getParent();
+        if (contentParent != null) contentParent.removeView(content);
+        sv.addView(content, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(sv);
+
+        overlayContainer.addView(root);
+        overlayContainer.setVisibility(View.VISIBLE);
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
     // ---------- Overflow sheet (custom) ----------
     private void showOverflowSheet(View anchor) {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
@@ -723,9 +812,18 @@ public class MainActivity extends AppCompatActivity {
         addOverflowItem(grid, "Save page", R.drawable.ic_download, this::savePage);
         addOverflowItem(grid, devToolsActive ? "Hide DevTools" : "DevTools", R.drawable.ic_lightning, this::toggleDevTools);
         addOverflowItem(grid, desktopMode ? "Mobile site" : "Desktop site", R.drawable.ic_desktop, this::toggleDesktopMode);
-        addOverflowItem(grid, "JS inject", R.drawable.ic_lightning, () -> openToolsSheet(2));
-        addOverflowItem(grid, "Cookies", R.drawable.ic_cookie, () -> openToolsSheet(3));
-        addOverflowItem(grid, "User agent", R.drawable.ic_globe, () -> openToolsSheet(4));
+        addOverflowItem(grid, "JS inject", R.drawable.ic_lightning,
+            () -> showSingleToolOverlay("JS Inject", tabJSInject()));
+        addOverflowItem(grid, "Cookies", R.drawable.ic_cookie,
+            () -> showSingleToolOverlay("Cookies", tabCookies()));
+        addOverflowItem(grid, "User agent", R.drawable.ic_globe,
+            () -> showSingleToolOverlay("User Agent", tabUA()));
+        addOverflowItem(grid, "Storage", R.drawable.ic_settings,
+            () -> showSingleToolOverlay("Storage", tabStorage()));
+        addOverflowItem(grid, "Snippets", R.drawable.ic_lightning,
+            () -> showSingleToolOverlay("Snippets", tabSnippets()));
+        addOverflowItem(grid, "JS Runner", R.drawable.ic_lightning,
+            () -> showSingleToolOverlay("JS Runner", tabRunner()));
         addOverflowItem(grid, "Site settings", R.drawable.ic_settings, this::showSiteSettingsOverlay);
         addOverflowItem(grid, "Clear data", R.drawable.ic_trash, this::showClearDataDialog);
         addOverflowItem(grid, "New tab", R.drawable.ic_plus, () -> createNewTab(incognitoMode));
@@ -1110,7 +1208,20 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "DevTools shown — tap the floating icon", Toast.LENGTH_SHORT).show();
             });
         } else {
-            webView.evaluateJavascript("if(window.eruda){eruda.hide();eruda.destroy && eruda.destroy();}", null);
+            // Aggressive teardown: hide() + destroy() + remove eruda's DOM
+            // root + remove our injected stylesheet + null the global. This
+            // guarantees the floating eruda icon disappears and stays gone.
+            String teardown =
+                "(function(){"
+                + "try{if(window.eruda){"
+                + "  try{window.eruda.hide();}catch(e){}"
+                + "  try{window.eruda.destroy && window.eruda.destroy();}catch(e){}"
+                + "}}catch(e){}"
+                + "try{var n=document.getElementById('eruda');if(n)n.parentNode.removeChild(n);}catch(e){}"
+                + "try{var s=document.getElementById('__featherx_eruda_css');if(s)s.parentNode.removeChild(s);}catch(e){}"
+                + "try{window.eruda=undefined;}catch(e){}"
+                + "})();";
+            webView.evaluateJavascript(teardown, null);
             devToolsActive = false;
             Toast.makeText(MainActivity.this, "DevTools deactivated", Toast.LENGTH_SHORT).show();
         }
@@ -1324,15 +1435,24 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> webView.evaluateJavascript(js, v1 -> {
                     // Inject mobile-friendly CSS so eruda panels are full-width and scroll
                     // properly on narrow screens (no need to split-screen the device).
+                    // Mobile-friendly CSS so eruda's panels are usable on a
+                        // narrow phone screen — tables wrap & scroll, network/
+                        // resource detail panes go full-screen with their own
+                        // scroll, and rows have enough room for full URLs.
                     String mobileCss =
                         "var s=document.createElement('style');" +
                         "s.id='__featherx_eruda_css';" +
                         "s.textContent='" +
-                        "._eruda-content,._eruda-tab-content{max-width:100vw !important;overflow-x:auto !important;}" +
+                        "._eruda-container{font-size:12px !important;}" +
+                        "._eruda-content,._eruda-tab-content{max-width:100vw !important;overflow:auto !important;-webkit-overflow-scrolling:touch !important;}" +
                         "._eruda-bottom-bar,._eruda-tools{flex-wrap:wrap !important;}" +
-                        "._eruda-resources-table,._eruda-network-table{font-size:11px !important;min-width:0 !important;width:100% !important;}" +
-                        "._eruda-network-table td,._eruda-network-table th{word-break:break-all !important;}" +
-                        "._eruda-network-detail,._eruda-resources-detail{position:fixed !important;left:0 !important;right:0 !important;top:0 !important;bottom:0 !important;width:100vw !important;height:100vh !important;}" +
+                        "._eruda-resources-table,._eruda-network-table,._eruda-table{font-size:11px !important;min-width:100% !important;width:auto !important;table-layout:auto !important;}" +
+                        "._eruda-network-table td,._eruda-network-table th,._eruda-resources-table td,._eruda-resources-table th{word-break:break-all !important;white-space:normal !important;padding:4px 6px !important;}" +
+                        "._eruda-network ._eruda-request,._eruda-network ._eruda-name{max-width:none !important;white-space:normal !important;word-break:break-all !important;}" +
+                        "._eruda-network-detail,._eruda-resources-detail,._eruda-detail{position:fixed !important;left:0 !important;right:0 !important;top:0 !important;bottom:0 !important;width:100vw !important;height:100vh !important;max-width:none !important;max-height:none !important;overflow:auto !important;z-index:99999 !important;}" +
+                        "._eruda-detail pre,._eruda-detail code{white-space:pre-wrap !important;word-break:break-all !important;}" +
+                        "._eruda-tools{overflow-x:auto !important;white-space:nowrap !important;}" +
+                        "._eruda-tools li{display:inline-block !important;float:none !important;}" +
                         "';" +
                         "document.head.appendChild(s);";
                     webView.evaluateJavascript(
